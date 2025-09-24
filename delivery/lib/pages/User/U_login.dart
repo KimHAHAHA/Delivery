@@ -29,7 +29,7 @@ class _ULoginPageState extends State<ULoginPage> {
               // โลโก้
               CircleAvatar(
                 radius: 80,
-                backgroundColor: Colors.white,
+                backgroundColor: Colors.transparent,
                 child: ClipOval(
                   child: Image.asset(
                     "assets/images/Logo.png", // ใส่ path ของโลโก้คุณ

@@ -1,4 +1,7 @@
-import 'package:delivery/pages/Rider/R_home.dart';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/Rider/R_register.dart';
 import 'package:delivery/pages/User/U_home.dart';
 import 'package:delivery/pages/User/U_register.dart';
@@ -14,8 +17,8 @@ class ULoginPage extends StatefulWidget {
 }
 
 class _ULoginPageState extends State<ULoginPage> {
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +63,7 @@ class _ULoginPageState extends State<ULoginPage> {
                   children: [
                     // Username
                     TextField(
-                      controller: _usernameController,
+                      controller: usernameController,
                       decoration: const InputDecoration(
                         labelText: "ชื่อผู้ใช้งาน",
                         hintText: "ชื่อผู้ใช้งาน",
@@ -71,7 +74,7 @@ class _ULoginPageState extends State<ULoginPage> {
 
                     // Password
                     TextField(
-                      controller: _passwordController,
+                      controller: passwordController,
                       obscureText: true,
                       decoration: const InputDecoration(
                         labelText: "รหัสผ่าน",
@@ -93,7 +96,7 @@ class _ULoginPageState extends State<ULoginPage> {
                           ),
                         ),
                         onPressed: () {
-                          Get.to(() => const UHomePage());
+                          loginUser();
                         },
                         child: const Text(
                           "เข้าสู่ระบบ",
@@ -135,5 +138,56 @@ class _ULoginPageState extends State<ULoginPage> {
         ),
       ),
     );
+  }
+
+  void loginUser() async {
+    final username = usernameController.text.trim();
+    final passwordInput = passwordController.text.trim();
+
+    if (username.isEmpty || passwordInput.isEmpty) {
+      Get.snackbar('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบ');
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('user')
+          .doc(username)
+          .get();
+
+      if (!doc.exists) {
+        Get.snackbar('ผิดพลาด', 'ไม่พบชื่อผู้ใช้');
+        return;
+      }
+
+      final hashedInput = sha256.convert(utf8.encode(passwordInput)).toString();
+
+      final storedHashedPassword = doc['password'] as String;
+
+      if (hashedInput == storedHashedPassword) {
+        Get.snackbar(
+          'สำเร็จ',
+          'เข้าสู่ระบบเรียบร้อย',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        // ไปหน้า Home หรือหน้าที่ต้องการ
+        Get.to(() => const UHomePage());
+      } else {
+        Get.snackbar(
+          'ผิดพลาด',
+          'รหัสผ่านไม่ถูกต้อง',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'ผิดพลาด',
+        'เกิดข้อผิดพลาด: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }

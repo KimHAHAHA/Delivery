@@ -1,7 +1,10 @@
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/User/U_login.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
 
 class URegisterPage extends StatefulWidget {
   const URegisterPage({super.key});
@@ -11,12 +14,13 @@ class URegisterPage extends StatefulWidget {
 }
 
 class _URegisterPageState extends State<URegisterPage> {
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController addressController = TextEditingController();
+  var db = FirebaseFirestore.instance;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +46,7 @@ class _URegisterPageState extends State<URegisterPage> {
               children: [
                 // ชื่อผู้ใช้
                 TextField(
-                  controller: _usernameController,
+                  controller: usernameController,
                   decoration: const InputDecoration(
                     labelText: "ชื่อผู้ใช้งาน",
                     hintText: "ชื่อผู้ใช้งาน",
@@ -53,7 +57,7 @@ class _URegisterPageState extends State<URegisterPage> {
 
                 // เบอร์โทรศัพท์
                 TextField(
-                  controller: _phoneController,
+                  controller: phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: "หมายเลขโทรศัพท์",
@@ -65,7 +69,7 @@ class _URegisterPageState extends State<URegisterPage> {
 
                 // รหัสผ่าน
                 TextField(
-                  controller: _passwordController,
+                  controller: passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: "รหัสผ่าน",
@@ -77,7 +81,7 @@ class _URegisterPageState extends State<URegisterPage> {
 
                 // ยืนยันรหัสผ่าน
                 TextField(
-                  controller: _confirmPasswordController,
+                  controller: confirmPasswordController,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: "ยืนยันรหัสผ่าน",
@@ -89,7 +93,7 @@ class _URegisterPageState extends State<URegisterPage> {
 
                 // ที่อยู่
                 TextField(
-                  controller: _addressController,
+                  controller: addressController,
                   decoration: InputDecoration(
                     labelText: "ที่อยู่",
                     hintText: "ที่อยู่",
@@ -133,7 +137,7 @@ class _URegisterPageState extends State<URegisterPage> {
                       ),
                     ),
                     onPressed: () {
-                      Get.to(() => const ULoginPage());
+                      addData();
                     },
                     child: const Text(
                       "ลงทะเบียน",
@@ -147,5 +151,45 @@ class _URegisterPageState extends State<URegisterPage> {
         ),
       ),
     );
+  }
+
+  void addData() async {
+    final hashedPassword = sha256
+        .convert(utf8.encode(passwordController.text.trim()))
+        .toString();
+
+    var data = {
+      "username": usernameController.text.trim(),
+      "phone": phoneController.text.trim(),
+      "password": hashedPassword,
+      "address": addressController.text.trim(),
+    };
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('user')
+          .doc(usernameController.text.trim())
+          .set(data);
+
+      // แจ้งเตือนเมื่อสำเร็จ
+      Get.snackbar(
+        'สำเร็จ',
+        'บันทึกข้อมูลเรียบร้อยแล้ว',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      Get.to(() => const ULoginPage());
+    } catch (e) {
+      Get.snackbar(
+        'ผิดพลาด',
+        'บันทึกข้อมูลไม่สำเร็จ: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 }

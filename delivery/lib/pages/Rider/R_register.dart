@@ -1,7 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/User/U_login.dart';
+import 'package:firebase_storage/firebase_storage.dart' show FirebaseStorage;
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
+import 'package:image_picker/image_picker.dart';
 
 class RRegisterPage extends StatefulWidget {
   const RRegisterPage({super.key});
@@ -11,12 +17,15 @@ class RRegisterPage extends StatefulWidget {
 }
 
 class _RRegisterPageState extends State<RRegisterPage> {
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController _vehicleController = TextEditingController();
+  final TextEditingController vehicleController = TextEditingController();
+  final ImagePicker picker = ImagePicker();
+  XFile? RiderProfileImage;
+  XFile? vehicleImage;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +51,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
               children: [
                 // ชื่อผู้ใช้
                 TextField(
-                  controller: _usernameController,
+                  controller: usernameController,
                   decoration: const InputDecoration(
                     labelText: "ชื่อผู้ใช้งาน",
                     hintText: "ชื่อผู้ใช้งาน",
@@ -53,7 +62,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // เบอร์โทรศัพท์
                 TextField(
-                  controller: _phoneController,
+                  controller: phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: "หมายเลขโทรศัพท์",
@@ -65,7 +74,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // รหัสผ่าน
                 TextField(
-                  controller: _passwordController,
+                  controller: passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: "รหัสผ่าน",
@@ -77,7 +86,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // ยืนยันรหัสผ่าน
                 TextField(
-                  controller: _confirmPasswordController,
+                  controller: confirmPasswordController,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: "ยืนยันรหัสผ่าน",
@@ -89,7 +98,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // ทะเบียนรถ
                 TextField(
-                  controller: _vehicleController,
+                  controller: vehicleController,
                   decoration: const InputDecoration(
                     labelText: "ทะเบียนรถ",
                     hintText: "ทะเบียนรถ",
@@ -99,34 +108,40 @@ class _RRegisterPageState extends State<RRegisterPage> {
                 const SizedBox(height: 16),
 
                 // อัพโหลดรูปโปรไฟล์ Rider
+                // อัพโหลดรูปโปรไฟล์ Rider
                 TextField(
                   readOnly: true,
+                  controller: TextEditingController(
+                    text: RiderProfileImage != null
+                        ? RiderProfileImage!.name
+                        : '',
+                  ),
                   decoration: InputDecoration(
                     labelText: "เพิ่มรูปไรเดอร์",
                     hintText: "เพิ่มรูปไรเดอร์",
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.file_upload_outlined),
-                      onPressed: () {
-                        // TODO: เลือกรูปโปรไฟล์
-                      },
+                      onPressed: pickProfileImage, // เรียกฟังก์ชันเลือกภาพ
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
                 // อัพโหลดเอกสารพาหนะ
+                // อัพโหลดรูปยานพาหนะ
                 TextField(
                   readOnly: true,
+                  controller: TextEditingController(
+                    text: vehicleImage != null ? vehicleImage!.name : '',
+                  ),
                   decoration: InputDecoration(
                     labelText: "เพิ่มรูปยานพาหนะ",
                     hintText: "เพิ่มรูปยานพาหนะ",
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.file_upload_outlined),
-                      onPressed: () {
-                        // TODO: เลือกรูปยานพาหนะ
-                      },
+                      onPressed: pickVehicleImage, // เรียกฟังก์ชันเลือกภาพ
                     ),
                   ),
                 ),
@@ -144,7 +159,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
                       ),
                     ),
                     onPressed: () {
-                      Get.to(() => const ULoginPage());
+                      addDataRider();
                     },
                     child: const Text(
                       "ลงทะเบียน",
@@ -158,5 +173,105 @@ class _RRegisterPageState extends State<RRegisterPage> {
         ),
       ),
     );
+  }
+
+  Future<void> pickProfileImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        RiderProfileImage = picked;
+      });
+    }
+  }
+
+  Future<void> pickVehicleImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        vehicleImage = picked;
+      });
+    }
+  }
+
+  void addDataRider() async {
+    if (passwordController.text.trim() !=
+        confirmPasswordController.text.trim()) {
+      Get.snackbar(
+        'รหัสผ่านไม่ตรงกัน',
+        'กรุณากรอกรหัสผ่านให้ตรงกัน',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    final hashedPassword = sha256
+        .convert(utf8.encode(passwordController.text.trim()))
+        .toString();
+
+    String? imageUrl;
+    String? vehicleImageUrl;
+
+    try {
+      // ✅ ถ้ามีการเลือกรูป
+      if (RiderProfileImage != null) {
+        File file = File(RiderProfileImage!.path);
+        String fileName =
+            "${DateTime.now().millisecondsSinceEpoch}_${RiderProfileImage!.name}";
+
+        final storageRef = FirebaseStorage.instance.ref().child(
+          "rider_profiles/$fileName",
+        );
+
+        await storageRef.putFile(file);
+        imageUrl = await storageRef.getDownloadURL();
+      }
+
+      if (vehicleImage != null) {
+        File file = File(vehicleImage!.path);
+        String fileName =
+            "${DateTime.now().millisecondsSinceEpoch}_${vehicleImage!.name}";
+        final storageRef = FirebaseStorage.instance.ref().child(
+          "vehicle_images/$fileName",
+        );
+        await storageRef.putFile(file);
+        vehicleImageUrl = await storageRef.getDownloadURL();
+      }
+
+      // ✅ เก็บข้อมูลลง Firestore
+      var data = {
+        "username": usernameController.text.trim(),
+        "phone": phoneController.text.trim(),
+        "password": hashedPassword,
+        "vehicleController": vehicleController.text.trim(),
+        "imageUrl": imageUrl ?? "",
+        "vehicleImageUrl": vehicleImageUrl ?? "",
+      };
+      await FirebaseFirestore.instance
+          .collection('rider')
+          .doc(usernameController.text.trim())
+          .set(data);
+
+      // แจ้งเตือนเมื่อสำเร็จ
+      Get.snackbar(
+        'สำเร็จ',
+        'บันทึกข้อมูลเรียบร้อยแล้ว',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      Get.to(() => const ULoginPage());
+    } catch (e) {
+      Get.snackbar(
+        'ผิดพลาด',
+        'บันทึกข้อมูลไม่สำเร็จ: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 }

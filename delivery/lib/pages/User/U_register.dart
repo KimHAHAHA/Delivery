@@ -1,10 +1,14 @@
 import 'dart:convert';
-
+import 'dart:developer';
+import 'dart:io';
+import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/User/U_login.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 
 class URegisterPage extends StatefulWidget {
   const URegisterPage({super.key});
@@ -21,6 +25,11 @@ class _URegisterPageState extends State<URegisterPage> {
       TextEditingController();
   final TextEditingController addressController = TextEditingController();
   var db = FirebaseFirestore.instance;
+  double? latitude;
+  double? longitude;
+
+  final ImagePicker picker = ImagePicker();
+  XFile? image;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +100,7 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // ที่อยู่
+                // ที่อยู่ + GPS
                 TextField(
                   controller: addressController,
                   decoration: InputDecoration(
@@ -100,30 +109,94 @@ class _URegisterPageState extends State<URegisterPage> {
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.location_on_outlined),
-                      onPressed: () {
-                        // TODO: กดเลือกที่อยู่
+                      onPressed: () async {
+                        try {
+                          Position position = await _determinePosition();
+                          String gpsText =
+                              "${position.latitude}, ${position.longitude}";
+
+                          setState(() {
+                            addressController.text = gpsText;
+                          });
+
+                          log("📍 GPS: $gpsText");
+                          Get.snackbar(
+                            'ตำแหน่งปัจจุบัน',
+                            gpsText,
+                            snackPosition: SnackPosition.BOTTOM,
+                          );
+                        } catch (e) {
+                          Get.snackbar(
+                            'ผิดพลาด',
+                            'ไม่สามารถดึงตำแหน่งได้: $e',
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                          );
+                        }
                       },
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
 
                 // เพิ่มรูปผู้ใช้
-                TextField(
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: "เพิ่มรูปผู้ใช้",
-                    hintText: "เพิ่มรูปผู้ใช้",
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.file_upload_outlined),
-                      onPressed: () {
-                        // TODO: เลือกรูป
+                InkWell(
+                  onTap: () async {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (BuildContext bc) {
+                        return SafeArea(
+                          child: Wrap(
+                            children: <Widget>[
+                              ListTile(
+                                leading: const Icon(Icons.photo_camera),
+                                title: const Text('ถ่ายภาพด้วยกล้อง'),
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  image = await picker.pickImage(
+                                    source: ImageSource.camera,
+                                  );
+                                  setState(() {});
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.photo_library),
+                                title: const Text('เลือกรูปจากแกลเลอรี'),
+                                onTap: () async {
+                                  Navigator.pop(context);
+                                  image = await picker.pickImage(
+                                    source: ImageSource.gallery,
+                                  );
+                                  setState(() {});
+                                },
+                              ),
+                            ],
+                          ),
+                        );
                       },
+                    );
+                  },
+                  child: Container(
+                    height: 150,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: image == null
+                        ? const Center(
+                            child: Icon(Icons.file_upload_outlined, size: 40),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(image!.path),
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            ),
+                          ),
                   ),
                 ),
-                const SizedBox(height: 24),
 
                 // ปุ่มสมัครสมาชิก
                 SizedBox(
@@ -154,18 +227,58 @@ class _URegisterPageState extends State<URegisterPage> {
   }
 
   void addData() async {
+    if (passwordController.text.trim() !=
+        confirmPasswordController.text.trim()) {
+      Get.snackbar(
+        'รหัสผ่านไม่ตรงกัน',
+        'กรุณากรอกรหัสผ่านให้ตรงกัน',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
     final hashedPassword = sha256
         .convert(utf8.encode(passwordController.text.trim()))
         .toString();
 
-    var data = {
-      "username": usernameController.text.trim(),
-      "phone": phoneController.text.trim(),
-      "password": hashedPassword,
-      "address": addressController.text.trim(),
-    };
+    String? imageUrl;
 
     try {
+      // ✅ ถ้ามีการเลือกรูป
+      if (image != null) {
+        File file = File(image!.path);
+        String fileName =
+            "${DateTime.now().millisecondsSinceEpoch}_${image!.name}";
+
+        // อัปโหลดไป Firebase Storage
+        final storageRef = FirebaseStorage.instance.ref().child(
+          "user_images/$fileName",
+        );
+
+        try {
+          final uploadTask = await storageRef.putFile(file);
+          log("✅ Upload success: ${uploadTask.metadata?.fullPath}");
+
+          // ดึง URL ของไฟล์
+          imageUrl = await storageRef.getDownloadURL();
+          log("✅ Uploaded image URL: $imageUrl");
+        } catch (e) {
+          log("❌ Upload failed: $e");
+          throw e;
+        }
+      }
+
+      // ✅ เก็บข้อมูลลง Firestore
+      var data = {
+        "username": usernameController.text.trim(),
+        "phone": phoneController.text.trim(),
+        "password": hashedPassword,
+        "address": addressController.text.trim(),
+        "imageUrl": imageUrl ?? "",
+      };
+
       await FirebaseFirestore.instance
           .collection('user')
           .doc(usernameController.text.trim())
@@ -191,5 +304,47 @@ class _URegisterPageState extends State<URegisterPage> {
         duration: const Duration(seconds: 4),
       );
     }
+  }
+
+  /// Determine the current position of the device.
+  ///
+  /// When the location services are not enabled or permissions
+  /// are denied the `Future` will return an error.
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Test if location services are enabled.
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled don't continue
+      // accessing the position and request users of the
+      // App to enable the location services.
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied, next time you could try
+        // requesting permissions again (this is also where
+        // Android's shouldShowRequestPermissionRationale
+        // returned true. According to Android guidelines
+        // your App should show an explanatory UI now.
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, handle appropriately.
+      return Future.error(
+        'Location permissions are permanently denied, we cannot request permissions.',
+      );
+    }
+
+    // When we reach here, permissions are granted and we can
+    // continue accessing the position of the device.
+    return await Geolocator.getCurrentPosition();
   }
 }

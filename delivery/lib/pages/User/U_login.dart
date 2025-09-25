@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:delivery/pages/Rider/R_home.dart';
 import 'package:delivery/pages/Rider/R_register.dart';
 import 'package:delivery/pages/User/U_home.dart';
 import 'package:delivery/pages/User/U_register.dart';
@@ -150,37 +151,72 @@ class _ULoginPageState extends State<ULoginPage> {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
+      // ✅ คำนวณ hash password ที่กรอก
+      final hashedInput = sha256.convert(utf8.encode(passwordInput)).toString();
+
+      // ✅ ตรวจใน collection user
+      final userDoc = await FirebaseFirestore.instance
           .collection('user')
           .doc(username)
           .get();
 
-      if (!doc.exists) {
-        Get.snackbar('ผิดพลาด', 'ไม่พบชื่อผู้ใช้');
-        return;
+      if (userDoc.exists) {
+        final storedPassword = userDoc['password'] as String;
+        if (hashedInput == storedPassword) {
+          Get.snackbar(
+            'สำเร็จ',
+            'เข้าสู่ระบบเป็น User',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+          Get.to(() => const UHomePage()); // ไปหน้า user
+          return;
+        } else {
+          Get.snackbar(
+            'ผิดพลาด',
+            'รหัสผ่านไม่ถูกต้องสำหรับ User',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
+          return;
+        }
       }
 
-      final hashedInput = sha256.convert(utf8.encode(passwordInput)).toString();
+      // ✅ ถ้าไม่พบใน user ให้ตรวจใน rider
+      final riderDoc = await FirebaseFirestore.instance
+          .collection('rider')
+          .doc(username)
+          .get();
 
-      final storedHashedPassword = doc['password'] as String;
-
-      if (hashedInput == storedHashedPassword) {
-        Get.snackbar(
-          'สำเร็จ',
-          'เข้าสู่ระบบเรียบร้อย',
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
-        // ไปหน้า Home หรือหน้าที่ต้องการ
-        Get.to(() => const UHomePage());
-      } else {
-        Get.snackbar(
-          'ผิดพลาด',
-          'รหัสผ่านไม่ถูกต้อง',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+      if (riderDoc.exists) {
+        final storedPassword = riderDoc['password'] as String;
+        if (hashedInput == storedPassword) {
+          Get.snackbar(
+            'สำเร็จ',
+            'เข้าสู่ระบบเป็น Rider',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+          Get.to(() => const RHomePage());
+          return;
+        } else {
+          Get.snackbar(
+            'ผิดพลาด',
+            'รหัสผ่านไม่ถูกต้องสำหรับ Rider',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
+          return;
+        }
       }
+
+      // ✅ ถ้าไม่พบทั้ง user และ rider
+      Get.snackbar(
+        'ผิดพลาด',
+        'ไม่พบชื่อผู้ใช้ในระบบ',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } catch (e) {
       Get.snackbar(
         'ผิดพลาด',

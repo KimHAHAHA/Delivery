@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
@@ -9,6 +10,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 class URegisterPage extends StatefulWidget {
   const URegisterPage({super.key});
@@ -18,23 +20,38 @@ class URegisterPage extends StatefulWidget {
 }
 
 class _URegisterPageState extends State<URegisterPage> {
+  // --- Controller ---
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
   final TextEditingController addressController = TextEditingController();
-  var db = FirebaseFirestore.instance;
-  double? latitude;
-  double? longitude;
 
+  // --- Map & Image ---
+  final MapController mapController = MapController();
   final ImagePicker picker = ImagePicker();
   XFile? image;
+  LatLng currentPosition = const LatLng(16.246373, 103.251827);
+
+  final FirebaseFirestore db = FirebaseFirestore.instance;
+
+  @override
+  void dispose() {
+    // ✅ ป้องกัน error _dependents.isEmpty: is not true
+    usernameController.dispose();
+    phoneController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    addressController.dispose();
+    mapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF7DE1A4), // สีพื้นหลังเขียวอ่อน
+      backgroundColor: const Color(0xFF7DE1A4),
       body: Center(
         child: SingleChildScrollView(
           child: Container(
@@ -53,7 +70,7 @@ class _URegisterPageState extends State<URegisterPage> {
             ),
             child: Column(
               children: [
-                // ชื่อผู้ใช้
+                // -------- Username --------
                 TextField(
                   controller: usernameController,
                   decoration: const InputDecoration(
@@ -64,7 +81,7 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // เบอร์โทรศัพท์
+                // -------- Phone --------
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
@@ -76,7 +93,7 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // รหัสผ่าน
+                // -------- Password --------
                 TextField(
                   controller: passwordController,
                   obscureText: true,
@@ -88,7 +105,7 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // ยืนยันรหัสผ่าน
+                // -------- Confirm Password --------
                 TextField(
                   controller: confirmPasswordController,
                   obscureText: true,
@@ -100,32 +117,45 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // ที่อยู่ + GPS
+                // -------- Address (GPS) --------
                 TextField(
                   controller: addressController,
+                  readOnly: true,
                   decoration: InputDecoration(
-                    labelText: "ที่อยู่",
-                    hintText: "ที่อยู่",
+                    labelText: "ที่อยู่ (พิกัด)",
+                    hintText: "กดปุ่มเพื่อดึงตำแหน่ง",
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
-                      icon: const Icon(Icons.location_on_outlined),
+                      icon: const Icon(Icons.my_location, color: Colors.blue),
                       onPressed: () async {
                         try {
                           Position position = await _determinePosition();
-                          String gpsText =
-                              "${position.latitude}, ${position.longitude}";
-
-                          setState(() {
-                            addressController.text = gpsText;
-                          });
-
-                          log("📍 GPS: $gpsText");
-                          Get.snackbar(
-                            'ตำแหน่งปัจจุบัน',
-                            gpsText,
-                            snackPosition: SnackPosition.BOTTOM,
-                          );
+                          if (!mounted) return; // ✅ กัน setState หลัง dispose
+                          if (position.latitude.isFinite &&
+                              position.longitude.isFinite) {
+                            String gpsText =
+                                "${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}";
+                            setState(() {
+                              currentPosition = LatLng(
+                                position.latitude,
+                                position.longitude,
+                              );
+                              addressController.text = gpsText;
+                              mapController.move(currentPosition, 17);
+                            });
+                            log("📍 GPS: $gpsText");
+                            Get.snackbar(
+                              'ตำแหน่งปัจจุบัน',
+                              gpsText,
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.green,
+                              colorText: Colors.white,
+                            );
+                          } else {
+                            throw 'ค่าพิกัดไม่ถูกต้อง';
+                          }
                         } catch (e) {
+                          if (!mounted) return;
                           Get.snackbar(
                             'ผิดพลาด',
                             'ไม่สามารถดึงตำแหน่งได้: $e',
@@ -138,67 +168,181 @@ class _URegisterPageState extends State<URegisterPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20),
 
-                // เพิ่มรูปผู้ใช้
+                // -------- Map --------
+                SizedBox(
+                  height: 250,
+                  child: FlutterMap(
+                    mapController: mapController,
+                    options: MapOptions(
+                      initialCenter: currentPosition,
+                      initialZoom: 15.2,
+                      onTap: (tapPosition, point) {
+                        if (!mounted) return;
+                        if (point.latitude.isFinite &&
+                            point.longitude.isFinite) {
+                          setState(() {
+                            currentPosition = point;
+                            addressController.text =
+                                "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+                          });
+                          log("🖱️ Map tapped: $point");
+                        }
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                        userAgentPackageName: 'net.gonggang.osm_demo',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: currentPosition,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // -------- Upload Image --------
                 InkWell(
                   onTap: () async {
                     showModalBottomSheet(
                       context: context,
+                      backgroundColor: Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
                       builder: (BuildContext bc) {
                         return SafeArea(
-                          child: Wrap(
-                            children: <Widget>[
-                              ListTile(
-                                leading: const Icon(Icons.photo_camera),
-                                title: const Text('ถ่ายภาพด้วยกล้อง'),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  image = await picker.pickImage(
-                                    source: ImageSource.camera,
-                                  );
-                                  setState(() {});
-                                },
-                              ),
-                              ListTile(
-                                leading: const Icon(Icons.photo_library),
-                                title: const Text('เลือกรูปจากแกลเลอรี'),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  image = await picker.pickImage(
-                                    source: ImageSource.gallery,
-                                  );
-                                  setState(() {});
-                                },
-                              ),
-                            ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 8,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 60,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text(
+                                  "เลือกรูปภาพ",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.green.shade100,
+                                    child: const Icon(
+                                      Icons.photo_camera,
+                                      color: Colors.green,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'ถ่ายภาพด้วยกล้อง',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.camera,
+                                    );
+                                    if (!mounted) return;
+                                    if (picked != null) {
+                                      setState(() => image = picked);
+                                    }
+                                  },
+                                ),
+                                const Divider(),
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: const Icon(
+                                      Icons.photo_library,
+                                      color: Colors.blue,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'เลือกรูปจากแกลเลอรี',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.gallery,
+                                    );
+                                    if (!mounted) return;
+                                    if (picked != null) {
+                                      setState(() => image = picked);
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
                           ),
                         );
                       },
                     );
                   },
                   child: Container(
-                    height: 150,
-                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    child: image == null
-                        ? const Center(
-                            child: Icon(Icons.file_upload_outlined, size: 40),
-                          )
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(image!.path),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                            ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.file_upload_outlined, color: Colors.black54),
+                        SizedBox(width: 8),
+                        Text(
+                          "เพิ่มรูปภาพ",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+                const SizedBox(height: 20),
 
-                // ปุ่มสมัครสมาชิก
+                // -------- Submit Button --------
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -209,9 +353,7 @@ class _URegisterPageState extends State<URegisterPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: () {
-                      addData();
-                    },
+                    onPressed: addData,
                     child: const Text(
                       "ลงทะเบียน",
                       style: TextStyle(fontSize: 16, color: Colors.white),
@@ -226,6 +368,32 @@ class _URegisterPageState extends State<URegisterPage> {
     );
   }
 
+  // ---------- ดึงตำแหน่ง GPS ----------
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw 'Location services ปิดอยู่ กรุณาเปิด GPS';
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        throw 'ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง';
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      throw 'สิทธิ์เข้าถึงตำแหน่งถูกปฏิเสธถาวร';
+    }
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  // ---------- บันทึกข้อมูล ----------
   void addData() async {
     if (passwordController.text.trim() !=
         confirmPasswordController.text.trim()) {
@@ -246,32 +414,18 @@ class _URegisterPageState extends State<URegisterPage> {
     String? imageUrl;
 
     try {
-      // ✅ ถ้ามีการเลือกรูป
       if (image != null) {
-        File file = File(image!.path);
-        String fileName =
+        final file = File(image!.path);
+        final fileName =
             "${DateTime.now().millisecondsSinceEpoch}_${image!.name}";
-
-        // อัปโหลดไป Firebase Storage
         final storageRef = FirebaseStorage.instance.ref().child(
           "user_images/$fileName",
         );
-
-        try {
-          final uploadTask = await storageRef.putFile(file);
-          log("✅ Upload success: ${uploadTask.metadata?.fullPath}");
-
-          // ดึง URL ของไฟล์
-          imageUrl = await storageRef.getDownloadURL();
-          log("✅ Uploaded image URL: $imageUrl");
-        } catch (e) {
-          log("❌ Upload failed: $e");
-          throw e;
-        }
+        await storageRef.putFile(file);
+        imageUrl = await storageRef.getDownloadURL();
       }
 
-      // ✅ เก็บข้อมูลลง Firestore
-      var data = {
+      final data = {
         "username": usernameController.text.trim(),
         "phone": phoneController.text.trim(),
         "password": hashedPassword,
@@ -279,72 +433,26 @@ class _URegisterPageState extends State<URegisterPage> {
         "imageUrl": imageUrl ?? "",
       };
 
-      await FirebaseFirestore.instance
-          .collection('user')
-          .doc(usernameController.text.trim())
-          .set(data);
+      await db.collection('user').doc(usernameController.text.trim()).set(data);
 
-      // แจ้งเตือนเมื่อสำเร็จ
+      if (!mounted) return;
       Get.snackbar(
         'สำเร็จ',
         'บันทึกข้อมูลเรียบร้อยแล้ว',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green,
         colorText: Colors.white,
-        duration: const Duration(seconds: 3),
       );
       Get.to(() => const ULoginPage());
     } catch (e) {
+      if (!mounted) return;
       Get.snackbar(
         'ผิดพลาด',
         'บันทึกข้อมูลไม่สำเร็จ: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
-        duration: const Duration(seconds: 4),
       );
     }
-  }
-
-  /// Determine the current position of the device.
-  ///
-  /// When the location services are not enabled or permissions
-  /// are denied the `Future` will return an error.
-  Future<Position> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Test if location services are enabled.
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // Location services are not enabled don't continue
-      // accessing the position and request users of the
-      // App to enable the location services.
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied, next time you could try
-        // requesting permissions again (this is also where
-        // Android's shouldShowRequestPermissionRationale
-        // returned true. According to Android guidelines
-        // your App should show an explanatory UI now.
-        return Future.error('Location permissions are denied');
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, handle appropriately.
-      return Future.error(
-        'Location permissions are permanently denied, we cannot request permissions.',
-      );
-    }
-
-    // When we reach here, permissions are granted and we can
-    // continue accessing the position of the device.
-    return await Geolocator.getCurrentPosition();
   }
 }

@@ -109,20 +109,134 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // อัพโหลดรูปโปรไฟล์ Rider
                 // อัพโหลดรูปโปรไฟล์ Rider
-                TextField(
-                  readOnly: true,
-                  controller: TextEditingController(
-                    text: RiderProfileImage != null
-                        ? RiderProfileImage!.name
-                        : '',
-                  ),
-                  decoration: InputDecoration(
-                    labelText: "เพิ่มรูปไรเดอร์",
-                    hintText: "เพิ่มรูปไรเดอร์",
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.file_upload_outlined),
-                      onPressed: pickProfileImage, // เรียกฟังก์ชันเลือกภาพ
+                // เพิ่มรูปไรเดอร์ (เลือกได้เหมือน bottom sheet สวยๆ)
+                InkWell(
+                  onTap: () async {
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
+                      builder: (BuildContext bc) {
+                        return SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 8,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 60,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text(
+                                  "เลือกรูปไรเดอร์",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.green.shade100,
+                                    child: const Icon(
+                                      Icons.photo_camera,
+                                      color: Colors.green,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'ถ่ายภาพด้วยกล้อง',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.camera,
+                                    );
+                                    if (picked != null) {
+                                      setState(
+                                        () => RiderProfileImage = picked,
+                                      );
+                                    }
+                                  },
+                                ),
+                                const Divider(),
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: const Icon(
+                                      Icons.photo_library,
+                                      color: Colors.blue,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'เลือกรูปจากแกลเลอรี',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.gallery,
+                                    );
+                                    if (picked != null) {
+                                      setState(
+                                        () => RiderProfileImage = picked,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            RiderProfileImage != null
+                                ? RiderProfileImage!.name
+                                : 'เพิ่มรูปไรเดอร์',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.file_upload_outlined,
+                          color: Colors.black54,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -130,18 +244,135 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
                 // อัพโหลดเอกสารพาหนะ
                 // อัพโหลดรูปยานพาหนะ
-                TextField(
-                  readOnly: true,
-                  controller: TextEditingController(
-                    text: vehicleImage != null ? vehicleImage!.name : '',
-                  ),
-                  decoration: InputDecoration(
-                    labelText: "เพิ่มรูปยานพาหนะ",
-                    hintText: "เพิ่มรูปยานพาหนะ",
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.file_upload_outlined),
-                      onPressed: pickVehicleImage, // เรียกฟังก์ชันเลือกภาพ
+                // เพิ่มรูปยานพาหนะ (เลือกได้จากกล้องหรือแกลเลอรี)
+                InkWell(
+                  onTap: () async {
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                      ),
+                      builder: (BuildContext bc) {
+                        return SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 8,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // handle bar ด้านบน
+                                Container(
+                                  width: 60,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                const Text(
+                                  "เลือกรูปยานพาหนะ",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // ปุ่มถ่ายด้วยกล้อง
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.orange.shade100,
+                                    child: const Icon(
+                                      Icons.photo_camera,
+                                      color: Colors.deepOrange,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'ถ่ายภาพด้วยกล้อง',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.camera,
+                                    );
+                                    if (picked != null) {
+                                      setState(() => vehicleImage = picked);
+                                    }
+                                  },
+                                ),
+                                const Divider(),
+
+                                // ปุ่มเลือกจากแกลเลอรี
+                                ListTile(
+                                  leading: CircleAvatar(
+                                    radius: 24,
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: const Icon(
+                                      Icons.photo_library,
+                                      color: Colors.blue,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  title: const Text(
+                                    'เลือกรูปจากแกลเลอรี',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final picked = await picker.pickImage(
+                                      source: ImageSource.gallery,
+                                    );
+                                    if (picked != null) {
+                                      setState(() => vehicleImage = picked);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            vehicleImage != null
+                                ? vehicleImage!.name
+                                : 'เพิ่มรูปยานพาหนะ',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.file_upload_outlined,
+                          color: Colors.black54,
+                        ),
+                      ],
                     ),
                   ),
                 ),

@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/User/U_login.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class URegisterPage extends StatefulWidget {
   const URegisterPage({super.key});
@@ -20,7 +20,6 @@ class URegisterPage extends StatefulWidget {
 }
 
 class _URegisterPageState extends State<URegisterPage> {
-  // --- Controller ---
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
@@ -28,7 +27,6 @@ class _URegisterPageState extends State<URegisterPage> {
       TextEditingController();
   final TextEditingController addressController = TextEditingController();
 
-  // --- Map & Image ---
   final MapController mapController = MapController();
   final ImagePicker picker = ImagePicker();
   XFile? image;
@@ -38,7 +36,6 @@ class _URegisterPageState extends State<URegisterPage> {
 
   @override
   void dispose() {
-    // ✅ ป้องกัน error _dependents.isEmpty: is not true
     usernameController.dispose();
     phoneController.dispose();
     passwordController.dispose();
@@ -70,7 +67,6 @@ class _URegisterPageState extends State<URegisterPage> {
             ),
             child: Column(
               children: [
-                // -------- Username --------
                 TextField(
                   controller: usernameController,
                   decoration: const InputDecoration(
@@ -80,8 +76,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // -------- Phone --------
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
@@ -92,8 +86,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // -------- Password --------
                 TextField(
                   controller: passwordController,
                   obscureText: true,
@@ -104,8 +96,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // -------- Confirm Password --------
                 TextField(
                   controller: confirmPasswordController,
                   obscureText: true,
@@ -116,8 +106,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // -------- Address (GPS) --------
                 TextField(
                   controller: addressController,
                   readOnly: true,
@@ -130,30 +118,24 @@ class _URegisterPageState extends State<URegisterPage> {
                       onPressed: () async {
                         try {
                           Position position = await _determinePosition();
-                          if (!mounted) return; // ✅ กัน setState หลัง dispose
-                          if (position.latitude.isFinite &&
-                              position.longitude.isFinite) {
-                            String gpsText =
-                                "${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}";
-                            setState(() {
-                              currentPosition = LatLng(
-                                position.latitude,
-                                position.longitude,
-                              );
-                              addressController.text = gpsText;
-                              mapController.move(currentPosition, 17);
-                            });
-                            log("📍 GPS: $gpsText");
-                            Get.snackbar(
-                              'ตำแหน่งปัจจุบัน',
-                              gpsText,
-                              snackPosition: SnackPosition.BOTTOM,
-                              backgroundColor: Colors.green,
-                              colorText: Colors.white,
+                          if (!mounted) return;
+                          final gpsText =
+                              "${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}";
+                          setState(() {
+                            currentPosition = LatLng(
+                              position.latitude,
+                              position.longitude,
                             );
-                          } else {
-                            throw 'ค่าพิกัดไม่ถูกต้อง';
-                          }
+                            addressController.text = gpsText;
+                            mapController.move(currentPosition, 17);
+                          });
+                          Get.snackbar(
+                            'ตำแหน่งปัจจุบัน',
+                            gpsText,
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.green,
+                            colorText: Colors.white,
+                          );
                         } catch (e) {
                           if (!mounted) return;
                           Get.snackbar(
@@ -169,8 +151,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // -------- Map --------
                 SizedBox(
                   height: 250,
                   child: FlutterMap(
@@ -180,15 +160,12 @@ class _URegisterPageState extends State<URegisterPage> {
                       initialZoom: 15.2,
                       onTap: (tapPosition, point) {
                         if (!mounted) return;
-                        if (point.latitude.isFinite &&
-                            point.longitude.isFinite) {
-                          setState(() {
-                            currentPosition = point;
-                            addressController.text =
-                                "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
-                          });
-                          log("🖱️ Map tapped: $point");
-                        }
+                        setState(() {
+                          currentPosition = point;
+                          addressController.text =
+                              "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+                        });
+                        log("🖱️ Map tapped: $point");
                       },
                     ),
                     children: [
@@ -213,103 +190,15 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // -------- Upload Image --------
                 InkWell(
                   onTap: () async {
-                    showModalBottomSheet(
-                      context: context,
-                      backgroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(24),
-                        ),
-                      ),
-                      builder: (BuildContext bc) {
-                        return SafeArea(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 16,
-                              horizontal: 8,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 60,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  "เลือกรูปภาพ",
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                ListTile(
-                                  leading: CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor: Colors.green.shade100,
-                                    child: const Icon(
-                                      Icons.photo_camera,
-                                      color: Colors.green,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'ถ่ายภาพด้วยกล้อง',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
-                                  onTap: () async {
-                                    Navigator.pop(context);
-                                    final picked = await picker.pickImage(
-                                      source: ImageSource.camera,
-                                    );
-                                    if (!mounted) return;
-                                    if (picked != null) {
-                                      setState(() => image = picked);
-                                    }
-                                  },
-                                ),
-                                const Divider(),
-                                ListTile(
-                                  leading: CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor: Colors.blue.shade100,
-                                    child: const Icon(
-                                      Icons.photo_library,
-                                      color: Colors.blue,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  title: const Text(
-                                    'เลือกรูปจากแกลเลอรี',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
-                                  onTap: () async {
-                                    Navigator.pop(context);
-                                    final picked = await picker.pickImage(
-                                      source: ImageSource.gallery,
-                                    );
-                                    if (!mounted) return;
-                                    if (picked != null) {
-                                      setState(() => image = picked);
-                                    }
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                    final picked = await picker.pickImage(
+                      source: ImageSource.gallery,
                     );
+                    if (!mounted) return;
+                    if (picked != null) {
+                      setState(() => image = picked);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(14),
@@ -341,8 +230,6 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // -------- Submit Button --------
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -368,33 +255,24 @@ class _URegisterPageState extends State<URegisterPage> {
     );
   }
 
-  // ---------- ดึงตำแหน่ง GPS ----------
   Future<Position> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      throw 'Location services ปิดอยู่ กรุณาเปิด GPS';
-    }
-
-    permission = await Geolocator.checkPermission();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) throw 'Location services ปิดอยู่';
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         throw 'ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง';
       }
     }
-
     if (permission == LocationPermission.deniedForever) {
-      throw 'สิทธิ์เข้าถึงตำแหน่งถูกปฏิเสธถาวร';
+      throw 'สิทธิ์ถูกปฏิเสธถาวร';
     }
-
     return await Geolocator.getCurrentPosition();
   }
 
-  // ---------- บันทึกข้อมูล ----------
   void addData() async {
+    // ตรวจสอบรหัสผ่าน
     if (passwordController.text.trim() !=
         confirmPasswordController.text.trim()) {
       Get.snackbar(
@@ -411,26 +289,43 @@ class _URegisterPageState extends State<URegisterPage> {
         .convert(utf8.encode(passwordController.text.trim()))
         .toString();
 
-    String? imageUrl;
+    String? imageUrlSupabase;
 
     try {
       if (image != null) {
         final file = File(image!.path);
-        final fileName =
-            "${DateTime.now().millisecondsSinceEpoch}_${image!.name}";
-        final storageRef = FirebaseStorage.instance.ref().child(
-          "user_images/$fileName",
+        final safeName = image!.name.replaceAll(
+          RegExp(r'[^a-zA-Z0-9._-]'),
+          '_',
         );
-        await storageRef.putFile(file);
-        imageUrl = await storageRef.getDownloadURL();
+        final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
+
+        // ✅ อัปโหลดไป Supabase Storage
+        final supabase = Supabase.instance.client;
+        final supaFileName = "user_images/$fileName";
+        log("Uploading to Supabase path: $supaFileName");
+
+        final supaResponse = await supabase.storage
+            .from('user')
+            .upload(supaFileName, file);
+
+        if (supaResponse.isNotEmpty) {
+          imageUrlSupabase = supabase.storage
+              .from('user')
+              .getPublicUrl(supaFileName);
+          log("✅ Supabase uploaded: $imageUrlSupabase");
+        } else {
+          throw 'Supabase upload failed';
+        }
       }
 
+      // ✅ บันทึกข้อมูลลง Firestore
       final data = {
         "username": usernameController.text.trim(),
         "phone": phoneController.text.trim(),
         "password": hashedPassword,
         "address": addressController.text.trim(),
-        "imageUrl": imageUrl ?? "",
+        "imageSupabase": imageUrlSupabase ?? "",
       };
 
       await db.collection('user').doc(usernameController.text.trim()).set(data);
@@ -443,9 +338,13 @@ class _URegisterPageState extends State<URegisterPage> {
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
+
       Get.to(() => const ULoginPage());
-    } catch (e) {
+    } catch (e, stack) {
       if (!mounted) return;
+      log('❌ Error while saving user: $e');
+      log('Stack trace: $stack');
+
       Get.snackbar(
         'ผิดพลาด',
         'บันทึกข้อมูลไม่สำเร็จ: $e',

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RRegisterPage extends StatefulWidget {
   const RRegisterPage({super.key});
@@ -425,6 +427,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
   }
 
   void addDataRider() async {
+    // ✅ ตรวจสอบรหัสผ่าน
     if (passwordController.text.trim() !=
         confirmPasswordController.text.trim()) {
       Get.snackbar(
@@ -441,50 +444,75 @@ class _RRegisterPageState extends State<RRegisterPage> {
         .convert(utf8.encode(passwordController.text.trim()))
         .toString();
 
-    String? imageUrl;
-    String? vehicleImageUrl;
+    String? riderImageUrl; // URL ของรูปโปรไฟล์จาก Supabase
+    String? vehicleImageUrl; // URL ของรูปรถจาก Supabase
 
     try {
-      // ✅ ถ้ามีการเลือกรูป
+      final supabase = Supabase.instance.client;
+
+      // ✅ อัปโหลดรูปโปรไฟล์ไรเดอร์ไป Supabase
       if (RiderProfileImage != null) {
-        File file = File(RiderProfileImage!.path);
-        String fileName =
-            "${DateTime.now().millisecondsSinceEpoch}_${RiderProfileImage!.name}";
-
-        final storageRef = FirebaseStorage.instance.ref().child(
-          "rider_profiles/$fileName",
+        final file = File(RiderProfileImage!.path);
+        final safeName = RiderProfileImage!.name.replaceAll(
+          RegExp(r'[^a-zA-Z0-9._-]'),
+          '_',
         );
+        final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
+        final supaPath = "rider_profiles/$fileName";
 
-        await storageRef.putFile(file);
-        imageUrl = await storageRef.getDownloadURL();
+        // อัปโหลดไป bucket ชื่อ rider (ต้องสร้าง bucket ชื่อนี้ใน Supabase)
+        final response = await supabase.storage
+            .from('rider')
+            .upload(supaPath, file);
+
+        if (response.isNotEmpty) {
+          riderImageUrl = supabase.storage.from('rider').getPublicUrl(supaPath);
+          log("✅ Rider profile uploaded: $riderImageUrl");
+        } else {
+          throw 'อัปโหลดรูปโปรไฟล์ไป Supabase ไม่สำเร็จ';
+        }
       }
 
+      // ✅ อัปโหลดรูปรถไป Supabase
       if (vehicleImage != null) {
-        File file = File(vehicleImage!.path);
-        String fileName =
-            "${DateTime.now().millisecondsSinceEpoch}_${vehicleImage!.name}";
-        final storageRef = FirebaseStorage.instance.ref().child(
-          "vehicle_images/$fileName",
+        final file = File(vehicleImage!.path);
+        final safeName = vehicleImage!.name.replaceAll(
+          RegExp(r'[^a-zA-Z0-9._-]'),
+          '_',
         );
-        await storageRef.putFile(file);
-        vehicleImageUrl = await storageRef.getDownloadURL();
+        final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
+        final supaPath = "vehicle_images/$fileName";
+
+        final response = await supabase.storage
+            .from('rider')
+            .upload(supaPath, file);
+
+        if (response.isNotEmpty) {
+          vehicleImageUrl = supabase.storage
+              .from('rider')
+              .getPublicUrl(supaPath);
+          log("✅ Vehicle image uploaded: $vehicleImageUrl");
+        } else {
+          throw 'อัปโหลดรูปรถไป Supabase ไม่สำเร็จ';
+        }
       }
 
-      // ✅ เก็บข้อมูลลง Firestore
-      var data = {
+      // ✅ เก็บข้อมูลลง Firestore (เก็บเฉพาะ URL จาก Supabase)
+      final data = {
         "username": usernameController.text.trim(),
         "phone": phoneController.text.trim(),
         "password": hashedPassword,
         "vehicleController": vehicleController.text.trim(),
-        "imageUrl": imageUrl ?? "",
+        "riderImageUrl": riderImageUrl ?? "",
         "vehicleImageUrl": vehicleImageUrl ?? "",
       };
+
       await FirebaseFirestore.instance
           .collection('rider')
           .doc(usernameController.text.trim())
           .set(data);
 
-      // แจ้งเตือนเมื่อสำเร็จ
+      // ✅ แจ้งเตือนเมื่อสำเร็จ
       Get.snackbar(
         'สำเร็จ',
         'บันทึกข้อมูลเรียบร้อยแล้ว',
@@ -493,8 +521,11 @@ class _RRegisterPageState extends State<RRegisterPage> {
         colorText: Colors.white,
         duration: const Duration(seconds: 3),
       );
+
       Get.to(() => const ULoginPage());
-    } catch (e) {
+    } catch (e, stack) {
+      log("❌ Error while saving rider: $e");
+      log("Stack trace: $stack");
       Get.snackbar(
         'ผิดพลาด',
         'บันทึกข้อมูลไม่สำเร็จ: $e',

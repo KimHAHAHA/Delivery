@@ -1,9 +1,11 @@
 import 'package:delivery/pages/Rider/R_detail.dart';
 import 'package:delivery/pages/Rider/R_proflie.dart';
 import 'package:delivery/pages/Rider/R_track.dart';
+import 'package:delivery/providers/rider_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
+import 'package:provider/provider.dart';
 
 class RHomePage extends StatefulWidget {
   const RHomePage({super.key});
@@ -34,6 +36,7 @@ class _RHomePageState extends State<RHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final riderProvider = context.watch<RiderProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวทั้งหน้า
       body: SafeArea(
@@ -47,13 +50,13 @@ class _RHomePageState extends State<RHomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, // ✅ ยืนยันชิดซ้าย
-                children: const [
+                children: [
                   Text(
-                    "สวัสดี .........",
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    "สวัสดี ${riderProvider.username ?? '...'}", // ✅ ใช้ Provider
+                    style: const TextStyle(fontSize: 16, color: Colors.white),
                   ),
-                  SizedBox(height: 6),
-                  Text(
+                  const SizedBox(height: 6),
+                  const Text(
                     "ส่งอะไรดีวันนี้?",
                     style: TextStyle(
                       fontSize: 20,

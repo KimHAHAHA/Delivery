@@ -2,8 +2,10 @@ import 'package:delivery/pages/Rider/R_changpassword.dart';
 import 'package:delivery/pages/Rider/R_editproflie.dart';
 import 'package:delivery/pages/Rider/R_home.dart';
 import 'package:delivery/pages/User/U_login.dart';
+import 'package:delivery/providers/rider_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 
 class RProfilePage extends StatefulWidget {
   const RProfilePage({super.key});
@@ -31,6 +33,7 @@ class _RProfilePageState extends State<RProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final riderProvider = context.watch<RiderProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // สีพื้นหลังเขียวอ่อน
       body: SafeArea(
@@ -50,21 +53,28 @@ class _RProfilePageState extends State<RProfilePage> {
             const SizedBox(height: 20),
 
             // Avatar
-            const CircleAvatar(
+            CircleAvatar(
               radius: 60,
               backgroundColor: Colors.white,
-              child: Icon(Icons.person, size: 70, color: Colors.deepPurple),
+              backgroundImage:
+                  riderProvider.riderImageUrl != null &&
+                      riderProvider.riderImageUrl!.isNotEmpty
+                  ? NetworkImage(riderProvider.riderImageUrl!)
+                  : null,
+              child: riderProvider.riderImageUrl == null
+                  ? const Icon(Icons.person, size: 70, color: Colors.deepPurple)
+                  : null,
             ),
             const SizedBox(height: 20),
 
             // ข้อมูลผู้ใช้
-            const Text(
-              "ชื่อ : สมชาย",
-              style: TextStyle(fontSize: 18, color: Colors.black),
+            Text(
+              "ชื่อ : ${riderProvider.username ?? '-'}",
+              style: const TextStyle(fontSize: 18, color: Colors.black),
             ),
-            const Text(
-              "เบอร์ : 081",
-              style: TextStyle(fontSize: 18, color: Colors.black),
+            Text(
+              "เบอร์ : ${riderProvider.phone ?? '-'}",
+              style: const TextStyle(fontSize: 18, color: Colors.black),
             ),
             const SizedBox(height: 20),
 
@@ -114,6 +124,7 @@ class _RProfilePageState extends State<RProfilePage> {
                     ),
                   ),
                   onPressed: () {
+                    riderProvider.clear();
                     Get.offAll(() => const ULoginPage()); // ออกจากระบบ
                   },
                   child: const Text(

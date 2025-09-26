@@ -1,23 +1,96 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery/pages/User/U_proflie.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/get_navigation.dart';
+import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 
-class EditProfilePage extends StatelessWidget {
+class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final TextEditingController nameController = TextEditingController(
-      text: "สมชาย",
-    );
-    final TextEditingController phoneController = TextEditingController(
-      text: "081",
-    );
-    final TextEditingController imageController = TextEditingController();
+  State<EditProfilePage> createState() => _EditProfilePageState();
+}
 
+class _EditProfilePageState extends State<EditProfilePage> {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ โหลดค่าปัจจุบันจาก Provider
+    final user = context.read<UserProvider>();
+    nameController.text = user.username ?? "";
+    phoneController.text = user.phone ?? "";
+  }
+
+  Future<void> _saveProfile() async {
+    final username = nameController.text.trim();
+    final phone = phoneController.text.trim();
+
+    if (username.isEmpty || phone.isEmpty) {
+      Get.snackbar(
+        "ผิดพลาด",
+        "กรุณากรอกข้อมูลให้ครบ",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      final userProvider = context.read<UserProvider>();
+      final currentUsername = userProvider.username;
+
+      if (currentUsername == null) {
+        Get.snackbar(
+          "ผิดพลาด",
+          "ไม่พบผู้ใช้ในระบบ",
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      // ✅ update Firestore
+      final docRef = FirebaseFirestore.instance
+          .collection("user")
+          .doc(currentUsername);
+
+      await docRef.update({"username": username, "phone": phone});
+
+      // ✅ update Provider
+      userProvider.setUserData(
+        username: username,
+        phone: phone,
+        address: userProvider.address ?? "",
+        imageUrl: userProvider.imageUrl ?? "",
+      );
+
+      Get.snackbar(
+        "สำเร็จ",
+        "บันทึกข้อมูลเรียบร้อย",
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+
+      Get.off(() => const UProfilePage());
+    } catch (e) {
+      Get.snackbar(
+        "ผิดพลาด",
+        "ไม่สามารถบันทึกได้: $e",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
+      backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
@@ -35,7 +108,6 @@ class EditProfilePage extends StatelessWidget {
             color: Colors.black,
           ),
         ),
-        centerTitle: false,
       ),
       body: Center(
         child: Container(
@@ -51,7 +123,10 @@ class EditProfilePage extends StatelessWidget {
               // ชื่อ
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: "ชื่อผู้ใช้งาน",
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -59,23 +134,9 @@ class EditProfilePage extends StatelessWidget {
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-
-              // เพิ่มรูปผู้ใช้
-              TextField(
-                controller: imageController,
-                readOnly: true,
-                decoration: InputDecoration(
-                  hintText: "แก้ไขรูปผู้ใช้",
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.file_upload_outlined),
-                    onPressed: () {
-                      // TODO: เลือกรูปโปรไฟล์
-                    },
-                  ),
+                decoration: const InputDecoration(
+                  labelText: "เบอร์โทร",
+                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 24),
@@ -91,11 +152,9 @@ class EditProfilePage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: () {
-                    Get.to(() => const UProfilePage());
-                  },
+                  onPressed: _saveProfile,
                   child: const Text(
-                    "ลงทะเบียน",
+                    "บันทึก",
                     style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),

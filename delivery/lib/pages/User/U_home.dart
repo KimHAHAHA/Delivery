@@ -1,9 +1,11 @@
 import 'package:delivery/pages/User/%E0%B9%8AU_track.dart';
 import 'package:delivery/pages/User/U_delivery_list.dart';
 import 'package:delivery/pages/User/U_proflie.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
+import 'package:provider/provider.dart';
 
 class UHomePage extends StatefulWidget {
   const UHomePage({super.key});
@@ -36,6 +38,7 @@ class _UHomePageState extends State<UHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final username = context.watch<UserProvider>().username ?? "...";
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
       body: SafeArea(
@@ -59,8 +62,8 @@ class _UHomePageState extends State<UHomePage> {
               const SizedBox(height: 30),
 
               // ข้อความทักทาย
-              const Text(
-                "สวัสดี .........",
+              Text(
+                "สวัสดี $username",
                 style: TextStyle(fontSize: 16, color: Colors.white),
               ),
               const SizedBox(height: 6),

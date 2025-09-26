@@ -1,12 +1,15 @@
 import 'package:delivery/pages/User/%E0%B9%8AU_chagepassword.dart';
 import 'package:delivery/pages/User/%E0%B9%8AU_editproflie.dart';
 import 'package:delivery/pages/User/%E0%B9%8AU_track.dart';
+import 'package:delivery/pages/User/U_EditImagePage.dart';
 import 'package:delivery/pages/User/U_address.dart';
 import 'package:delivery/pages/User/U_home.dart';
 import 'package:delivery/pages/User/U_login.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
+import 'package:provider/provider.dart';
 
 class UProfilePage extends StatefulWidget {
   const UProfilePage({super.key});
@@ -39,6 +42,7 @@ class _UProfilePageState extends State<UProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = context.watch<UserProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
       body: SafeArea(
@@ -58,18 +62,46 @@ class _UProfilePageState extends State<UProfilePage> {
             const SizedBox(height: 20),
 
             // Avatar
-            const CircleAvatar(
+            // Avatar
+            CircleAvatar(
               radius: 50,
               backgroundColor: Colors.white,
-              child: Icon(Icons.person, size: 60, color: Colors.deepPurple),
+              backgroundImage: userProvider.imageUrl != null
+                  ? NetworkImage(userProvider.imageUrl!)
+                  : null,
+              child: userProvider.imageUrl == null
+                  ? const Icon(Icons.person, size: 60, color: Colors.deepPurple)
+                  : null,
+            ),
+            const SizedBox(height: 10),
+
+            // ปุ่มแก้ไขรูปภาพ ✅
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black87,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () {
+                Get.to(() => const EditImagePage());
+              },
+              label: const Text("แก้ไขรูปภาพ", style: TextStyle(fontSize: 14)),
             ),
             const SizedBox(height: 20),
 
-            // ข้อมูลผู้ใช้
-            const Text(
-              "ชื่อ : สมชาย\nเบอร์ : 081\nที่อยู่ : บ้าน",
+            // ✅ ข้อมูลผู้ใช้จริง
+            Text(
+              "ชื่อ : ${userProvider.username ?? '-'}\n"
+              "เบอร์ : ${userProvider.phone ?? '-'}\n"
+              "ที่อยู่ : ${userProvider.address ?? '-'}",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.black),
+              style: const TextStyle(fontSize: 16, color: Colors.black),
             ),
             const SizedBox(height: 30),
 
@@ -101,6 +133,7 @@ class _UProfilePageState extends State<UProfilePage> {
                     ),
                   ),
                   onPressed: () {
+                    context.read<UserProvider>().clear();
                     Get.to(() => const ULoginPage());
                   },
                   child: const Text(

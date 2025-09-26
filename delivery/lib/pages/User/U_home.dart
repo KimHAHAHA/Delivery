@@ -1,4 +1,9 @@
+import 'package:delivery/pages/User/%E0%B9%8AU_track.dart';
+import 'package:delivery/pages/User/U_delivery_list.dart';
+import 'package:delivery/pages/User/U_proflie.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_navigation/get_navigation.dart';
 
 class UHomePage extends StatefulWidget {
   const UHomePage({super.key});
@@ -14,6 +19,19 @@ class _UHomePageState extends State<UHomePage> {
     setState(() {
       _selectedIndex = index;
     });
+    switch (index) {
+      case 0:
+        Get.to(() => const UHomePage());
+        break;
+
+      case 1:
+        Get.to(() => const UTrackPage());
+        break;
+
+      case 2:
+        Get.to(() => const UProfilePage());
+        break;
+    }
   }
 
   @override
@@ -70,7 +88,7 @@ class _UHomePageState extends State<UHomePage> {
                   ),
                 ),
                 onPressed: () {
-                  // TODO: ไปหน้าเลือกรายละเอียดการส่งพัสดุ
+                  Get.to(() => UDeliveryList());
                 },
                 child: const Text(
                   "ส่งพัสดุ",

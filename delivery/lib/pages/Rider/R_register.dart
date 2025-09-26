@@ -381,6 +381,7 @@ class _RRegisterPageState extends State<RRegisterPage> {
                 const SizedBox(height: 24),
 
                 // ปุ่มสมัคร Rider
+                // ปุ่มสมัคร Rider
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -395,8 +396,24 @@ class _RRegisterPageState extends State<RRegisterPage> {
                       addDataRider();
                     },
                     child: const Text(
-                      "ลงทะเบียน",
+                      "ลงทะเบียน Rider",
                       style: TextStyle(fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 🔹 ปุ่ม Sign in
+                TextButton(
+                  onPressed: () {
+                    Get.to(() => const ULoginPage());
+                  },
+                  child: const Text(
+                    "Sign in",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.blue, // สีฟ้าเหมือนลิงก์
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),

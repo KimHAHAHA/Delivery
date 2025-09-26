@@ -230,6 +230,7 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
+                // -------- Submit Button --------
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -242,8 +243,24 @@ class _URegisterPageState extends State<URegisterPage> {
                     ),
                     onPressed: addData,
                     child: const Text(
-                      "ลงทะเบียน",
+                      "ลงทะเบียน User",
                       style: TextStyle(fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+
+                // 🔹 ปุ่ม Sign in ด้านล่าง
+                TextButton(
+                  onPressed: () {
+                    Get.to(() => const ULoginPage());
+                  },
+                  child: const Text(
+                    "Sign in",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.blue, // ฟ้าเหมือนลิงก์
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),

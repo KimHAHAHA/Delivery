@@ -9,13 +9,11 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Firebase Init
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
-  // ✅ Supabase Init
   await Supabase.initialize(
     url: 'https://oltfgdmbdgfxsfdgvesz.supabase.co',
     anonKey:

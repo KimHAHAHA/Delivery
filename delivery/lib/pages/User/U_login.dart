@@ -8,8 +8,7 @@ import 'package:delivery/pages/User/U_register.dart';
 import 'package:delivery/providers/rider_provider.dart';
 import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/get_navigation.dart';
+import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 class ULoginPage extends StatefulWidget {
@@ -143,6 +142,7 @@ class _ULoginPageState extends State<ULoginPage> {
     );
   }
 
+  // ✅ ฟังก์ชันล็อกอิน
   void loginUser() async {
     final username = usernameController.text.trim();
     final passwordInput = passwordController.text.trim();
@@ -153,10 +153,10 @@ class _ULoginPageState extends State<ULoginPage> {
     }
 
     try {
-      // ✅ คำนวณ hash password ที่กรอก
+      // ✅ แปลงรหัสผ่านที่กรอกเป็น hash
       final hashedInput = sha256.convert(utf8.encode(passwordInput)).toString();
 
-      // ✅ ตรวจใน collection user
+      // ✅ ตรวจใน collection "user"
       final userDoc = await FirebaseFirestore.instance
           .collection('user')
           .doc(username)
@@ -166,9 +166,15 @@ class _ULoginPageState extends State<ULoginPage> {
         final storedPassword = userDoc['password'] as String;
         if (hashedInput == storedPassword) {
           final phone = userDoc['phone'] as String;
-          final address = userDoc['address'] as String;
           final imageUrl = userDoc['imageSupabase'] as String;
 
+          // ✅ ดึง addresses (เป็น list)
+          final addresses = userDoc['addresses'] as List<dynamic>? ?? [];
+          final address = addresses.isNotEmpty
+              ? (addresses.first['detail'] ?? '')
+              : 'ไม่มีที่อยู่';
+
+          // ✅ บันทึกข้อมูลลง Provider
           context.read<UserProvider>().setUserData(
             username: username,
             phone: phone,
@@ -182,7 +188,8 @@ class _ULoginPageState extends State<ULoginPage> {
             backgroundColor: Colors.green,
             colorText: Colors.white,
           );
-          Get.to(() => const UHomePage()); // ไปหน้า user
+
+          Get.to(() => const UHomePage());
           return;
         } else {
           Get.snackbar(
@@ -195,7 +202,7 @@ class _ULoginPageState extends State<ULoginPage> {
         }
       }
 
-      // ✅ ถ้าไม่พบใน user ให้ตรวจใน rider
+      // ✅ ถ้าไม่พบ user → ตรวจใน collection "rider"
       final riderDoc = await FirebaseFirestore.instance
           .collection('rider')
           .doc(username)
@@ -212,12 +219,14 @@ class _ULoginPageState extends State<ULoginPage> {
             riderImageUrl: riderDoc['riderImageUrl'],
             vehicleImageUrl: riderDoc['vehicleImageUrl'],
           );
+
           Get.snackbar(
             'สำเร็จ',
             'เข้าสู่ระบบเป็น Rider',
             backgroundColor: Colors.green,
             colorText: Colors.white,
           );
+
           Get.to(() => const RHomePage());
           return;
         } else {

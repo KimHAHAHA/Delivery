@@ -42,7 +42,7 @@ class _UProfilePageState extends State<UProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userProvider = context.watch<UserProvider>();
+    final userProvider = context.read<UserProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
       body: SafeArea(
@@ -109,11 +109,11 @@ class _UProfilePageState extends State<UProfilePage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildActionButton("ที่อยู่"),
+                _buildActionButton("ที่อยู่", userProvider),
                 const SizedBox(width: 10),
-                _buildActionButton("แก้ไขบัญชี"),
+                _buildActionButton("แก้ไขบัญชี", userProvider),
                 const SizedBox(width: 10),
-                _buildActionButton("เปลี่ยนรหัส"),
+                _buildActionButton("เปลี่ยนรหัส", userProvider),
               ],
             ),
 
@@ -165,7 +165,7 @@ class _UProfilePageState extends State<UProfilePage> {
   }
 
   // ฟังก์ชันสร้างปุ่มดำเล็กๆ
-  Widget _buildActionButton(String text) {
+  Widget _buildActionButton(String text, UserProvider userProvider) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.black87,
@@ -176,7 +176,7 @@ class _UProfilePageState extends State<UProfilePage> {
       onPressed: () {
         switch (text) {
           case "ที่อยู่":
-            Get.to(() => const AddressPage());
+            Get.to(() => AddressPage(username: userProvider.username ?? ""));
             break;
 
           case "แก้ไขบัญชี":

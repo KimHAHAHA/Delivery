@@ -25,7 +25,10 @@ class _URegisterPageState extends State<URegisterPage> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController addressController = TextEditingController();
+  final TextEditingController addressController =
+      TextEditingController(); // พิกัด
+  final TextEditingController detailController =
+      TextEditingController(); // รายละเอียด
 
   final MapController mapController = MapController();
   final ImagePicker picker = ImagePicker();
@@ -34,6 +37,9 @@ class _URegisterPageState extends State<URegisterPage> {
 
   final FirebaseFirestore db = FirebaseFirestore.instance;
 
+  // ✅ เก็บหลาย address
+  List<Map<String, dynamic>> addresses = [];
+
   @override
   void dispose() {
     usernameController.dispose();
@@ -41,8 +47,40 @@ class _URegisterPageState extends State<URegisterPage> {
     passwordController.dispose();
     confirmPasswordController.dispose();
     addressController.dispose();
+    detailController.dispose();
     mapController.dispose();
     super.dispose();
+  }
+
+  // ✅ เพิ่ม address เข้าลิสต์
+  void addAddress() {
+    if (addressController.text.isNotEmpty && detailController.text.isNotEmpty) {
+      setState(() {
+        addresses.add({
+          "gps": addressController.text.trim(),
+          "detail": detailController.text.trim(),
+          "lat": currentPosition.latitude,
+          "lng": currentPosition.longitude,
+          "createdAt": DateTime.now(),
+        });
+        detailController.clear();
+      });
+      Get.snackbar(
+        "สำเร็จ",
+        "เพิ่มที่อยู่เรียบร้อยแล้ว",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } else {
+      Get.snackbar(
+        "ข้อมูลไม่ครบ",
+        "กรุณาเลือกพิกัดและใส่รายละเอียด",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+    }
   }
 
   @override
@@ -106,12 +144,14 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // ✅ พิกัด GPS
                 TextField(
                   controller: addressController,
                   readOnly: true,
                   decoration: InputDecoration(
                     labelText: "ที่อยู่ (พิกัด)",
-                    hintText: "กดปุ่มเพื่อดึงตำแหน่ง",
+                    hintText: "กดปุ่มหรือเลือกจากแผนที่",
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.my_location, color: Colors.blue),
@@ -150,6 +190,47 @@ class _URegisterPageState extends State<URegisterPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // ✅ รายละเอียดที่อยู่
+                TextField(
+                  controller: detailController,
+                  decoration: const InputDecoration(
+                    labelText: "รายละเอียดที่อยู่",
+                    hintText: "เช่น บ้าน, ที่ทำงาน, ร้าน ฯลฯ",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ปุ่มเพิ่มที่อยู่
+                ElevatedButton.icon(
+                  onPressed: addAddress,
+                  icon: const Icon(Icons.add_location_alt),
+                  label: const Text("เพิ่มที่อยู่"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+
+                // แสดงรายการที่อยู่
+                if (addresses.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Column(
+                    children: addresses.map((addr) {
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                        ),
+                        title: Text(addr["detail"]),
+                        subtitle: Text(addr["gps"]),
+                      );
+                    }).toList(),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
                 SizedBox(
                   height: 250,
@@ -190,6 +271,8 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
+
+                // ✅ อัปโหลดรูป
                 InkWell(
                   onTap: () async {
                     final picked = await picker.pickImage(
@@ -229,8 +312,10 @@ class _URegisterPageState extends State<URegisterPage> {
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 20),
-                // -------- Submit Button --------
+
+                // -------- Submit --------
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -250,16 +335,14 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 2),
 
-                // 🔹 ปุ่ม Sign in ด้านล่าง
+                // 🔹 ปุ่ม Sign in
                 TextButton(
-                  onPressed: () {
-                    Get.to(() => const ULoginPage());
-                  },
+                  onPressed: () => Get.to(() => const ULoginPage()),
                   child: const Text(
                     "Sign in",
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.blue, // ฟ้าเหมือนลิงก์
+                      color: Colors.blue,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -289,7 +372,6 @@ class _URegisterPageState extends State<URegisterPage> {
   }
 
   void addData() async {
-    // ตรวจสอบรหัสผ่าน
     if (passwordController.text.trim() !=
         confirmPasswordController.text.trim()) {
       Get.snackbar(
@@ -297,6 +379,17 @@ class _URegisterPageState extends State<URegisterPage> {
         'กรุณากรอกรหัสผ่านให้ตรงกัน',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    if (addresses.isEmpty) {
+      Get.snackbar(
+        'กรุณาเพิ่มที่อยู่',
+        'ต้องมีที่อยู่อย่างน้อย 1 รายการ',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
       return;
@@ -317,7 +410,6 @@ class _URegisterPageState extends State<URegisterPage> {
         );
         final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
 
-        // ✅ อัปโหลดไป Supabase Storage
         final supabase = Supabase.instance.client;
         final supaFileName = "user_images/$fileName";
         log("Uploading to Supabase path: $supaFileName");
@@ -326,26 +418,28 @@ class _URegisterPageState extends State<URegisterPage> {
             .from('user')
             .upload(supaFileName, file);
 
-        if (supaResponse.isNotEmpty) {
+        if (supaResponse == null) {
           imageUrlSupabase = supabase.storage
               .from('user')
               .getPublicUrl(supaFileName);
           log("✅ Supabase uploaded: $imageUrlSupabase");
         } else {
-          throw 'Supabase upload failed';
+          throw 'Supabase upload failed: $supaResponse';
         }
       }
 
-      // ✅ บันทึกข้อมูลลง Firestore
       final data = {
         "username": usernameController.text.trim(),
         "phone": phoneController.text.trim(),
         "password": hashedPassword,
-        "address": addressController.text.trim(),
         "imageSupabase": imageUrlSupabase ?? "",
+        "addresses": addresses,
       };
 
-      await db.collection('user').doc(usernameController.text.trim()).set(data);
+      await db
+          .collection('user')
+          .doc(usernameController.text.trim())
+          .set(data, SetOptions(merge: true));
 
       if (!mounted) return;
       Get.snackbar(

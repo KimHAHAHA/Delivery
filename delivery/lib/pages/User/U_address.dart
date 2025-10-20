@@ -97,8 +97,41 @@ class _AddressPageState extends State<AddressPage> {
     );
   }
 
-  // ✅ ลบที่อยู่
+  // ✅ ลบที่อยู่ (เพิ่ม popup ยืนยัน)
   void _deleteAddress(int index) async {
+    // แสดง popup ยืนยันก่อนลบ
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: const Text(
+            "ยืนยันการลบ",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text("คุณต้องการลบที่อยู่นี้ใช่หรือไม่?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("ยกเลิก", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("ลบ"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return; // ถ้าไม่ยืนยันก็ไม่ลบ
+
     setState(() {
       addresses.removeAt(index);
     });
@@ -279,7 +312,6 @@ class _AddressPageState extends State<AddressPage> {
                           };
 
                           setState(() {
-                            // ✅ แสดงที่อยู่ใหม่บนสุด
                             addresses.insert(0, newAddress);
                           });
 
@@ -288,7 +320,7 @@ class _AddressPageState extends State<AddressPage> {
                               .doc(widget.username)
                               .update({"addresses": addresses});
 
-                          await _loadAddresses(); // ✅ โหลดใหม่หลังเพิ่ม
+                          await _loadAddresses();
 
                           Navigator.pop(context);
                           Get.snackbar(

@@ -15,7 +15,7 @@ class RProfilePage extends StatefulWidget {
 }
 
 class _RProfilePageState extends State<RProfilePage> {
-  int _selectedIndex = 1; // ค่าเริ่มต้น: บัญชี
+  int _selectedIndex = 1;
 
   void _onItemTapped(int index) {
     setState(() {
@@ -35,7 +35,7 @@ class _RProfilePageState extends State<RProfilePage> {
   Widget build(BuildContext context) {
     final riderProvider = context.watch<RiderProvider>();
     return Scaffold(
-      backgroundColor: const Color(0xFF7DE1A4), // สีพื้นหลังเขียวอ่อน
+      backgroundColor: const Color(0xFF7DE1A4),
       body: SafeArea(
         child: Column(
           children: [

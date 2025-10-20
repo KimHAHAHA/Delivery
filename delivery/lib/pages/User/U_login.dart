@@ -1,14 +1,16 @@
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:delivery/pages/Rider/R_home.dart';
 import 'package:delivery/pages/Rider/R_register.dart';
 import 'package:delivery/pages/User/U_home.dart';
 import 'package:delivery/pages/User/U_register.dart';
+import 'package:delivery/providers/rider_provider.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/get_navigation.dart';
+import 'package:provider/provider.dart';
 
 class ULoginPage extends StatefulWidget {
   const ULoginPage({super.key});
@@ -163,6 +165,17 @@ class _ULoginPageState extends State<ULoginPage> {
       if (userDoc.exists) {
         final storedPassword = userDoc['password'] as String;
         if (hashedInput == storedPassword) {
+          final phone = userDoc['phone'] as String;
+          final address = userDoc['address'] as String;
+          final imageUrl = userDoc['imageSupabase'] as String;
+
+          context.read<UserProvider>().setUserData(
+            username: username,
+            phone: phone,
+            address: address,
+            imageUrl: imageUrl,
+          );
+
           Get.snackbar(
             'สำเร็จ',
             'เข้าสู่ระบบเป็น User',
@@ -191,6 +204,14 @@ class _ULoginPageState extends State<ULoginPage> {
       if (riderDoc.exists) {
         final storedPassword = riderDoc['password'] as String;
         if (hashedInput == storedPassword) {
+          final riderProvider = context.read<RiderProvider>();
+          riderProvider.setRiderData(
+            username: riderDoc['username'],
+            phone: riderDoc['phone'],
+            vehicleController: riderDoc['vehicleController'],
+            riderImageUrl: riderDoc['riderImageUrl'],
+            vehicleImageUrl: riderDoc['vehicleImageUrl'],
+          );
           Get.snackbar(
             'สำเร็จ',
             'เข้าสู่ระบบเป็น Rider',

@@ -1,19 +1,38 @@
 import 'package:flutter/material.dart';
 
 class AddProductPage extends StatefulWidget {
-  const AddProductPage({super.key});
+  final List<Map<String, dynamic>>? initialProducts; // ✅ รับสินค้าที่มีอยู่แล้ว
+
+  const AddProductPage({super.key, this.initialProducts});
 
   @override
   State<AddProductPage> createState() => _AddProductPageState();
 }
 
 class _AddProductPageState extends State<AddProductPage> {
-  // เก็บ list ของสินค้าและจำนวน
-  List<Map<String, TextEditingController>> productControllers = [
-    {"name": TextEditingController(), "qty": TextEditingController()},
-  ];
+  List<Map<String, TextEditingController>> productControllers = [];
 
-  // เพิ่มช่องกรอกสินค้า
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ ถ้ามีข้อมูลสินค้าเก่า → preload เข้า controller
+    if (widget.initialProducts != null && widget.initialProducts!.isNotEmpty) {
+      for (var item in widget.initialProducts!) {
+        productControllers.add({
+          "name": TextEditingController(text: item["name"] ?? ""),
+          "qty": TextEditingController(text: item["qty"]?.toString() ?? ""),
+        });
+      }
+    } else {
+      // ถ้าไม่มี → เพิ่มแถวว่าง
+      productControllers.add({
+        "name": TextEditingController(),
+        "qty": TextEditingController(),
+      });
+    }
+  }
+
   void _addProductField() {
     setState(() {
       productControllers.add({
@@ -23,7 +42,6 @@ class _AddProductPageState extends State<AddProductPage> {
     });
   }
 
-  // ลบช่องกรอกสินค้า
   void _removeProductField(int index) {
     setState(() {
       productControllers.removeAt(index);
@@ -33,9 +51,9 @@ class _AddProductPageState extends State<AddProductPage> {
   InputDecoration _inputDecoration(String hint, {String? label}) {
     return InputDecoration(
       filled: true,
-      fillColor: Colors.white, // สีพื้นหลังช่องกรอก
+      fillColor: Colors.white,
       hintText: hint,
-      labelText: label, // ✅ label สำหรับ TextField
+      labelText: label,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -51,31 +69,15 @@ class _AddProductPageState extends State<AddProductPage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
         title: const Text(
-          "เพิ่มข้อมูลสินค้า",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 255, 255, 255),
-          ),
+          "เพิ่ม / แก้ไขสินค้า",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header เหลือแค่สินค้า
-            const Text("สินค้า", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-
-            // ✅ ช่องกรอกสินค้าและจำนวน
             Expanded(
               child: ListView.builder(
                 itemCount: productControllers.length,
@@ -84,7 +86,6 @@ class _AddProductPageState extends State<AddProductPage> {
                     padding: const EdgeInsets.only(bottom: 12.0),
                     child: Row(
                       children: [
-                        // ช่องสินค้า
                         Expanded(
                           flex: 3,
                           child: TextField(
@@ -92,9 +93,7 @@ class _AddProductPageState extends State<AddProductPage> {
                             decoration: _inputDecoration("ชื่อสินค้า"),
                           ),
                         ),
-                        const SizedBox(width: 12),
-
-                        // ช่องจำนวน (มี label "จำนวน")
+                        const SizedBox(width: 8),
                         Expanded(
                           flex: 1,
                           child: TextField(
@@ -103,14 +102,9 @@ class _AddProductPageState extends State<AddProductPage> {
                             decoration: _inputDecoration("0", label: "จำนวน"),
                           ),
                         ),
-                        const SizedBox(width: 8),
-
-                        // ปุ่มลบ (กากบาท)
                         IconButton(
                           icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () {
-                            _removeProductField(index);
-                          },
+                          onPressed: () => _removeProductField(index),
                         ),
                       ],
                     ),
@@ -118,43 +112,32 @@ class _AddProductPageState extends State<AddProductPage> {
                 },
               ),
             ),
-
-            // ✅ ปุ่มเพิ่มสินค้า (อยู่ตรงกลาง)
-            Center(
-              child: TextButton(
-                onPressed: _addProductField,
-                child: const Text(
-                  "+ เพิ่มสินค้า",
-                  style: TextStyle(color: Colors.blue, fontSize: 16),
-                ),
+            TextButton(
+              onPressed: _addProductField,
+              child: const Text(
+                "+ เพิ่มสินค้า",
+                style: TextStyle(color: Colors.blue),
               ),
             ),
-            const SizedBox(height: 20),
-
-            // ✅ ปุ่มยืนยัน
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
                 onPressed: () {
-                  // TODO: บันทึกสินค้า
-                  for (var product in productControllers) {
-                    debugPrint(
-                      "สินค้า: ${product["name"]!.text}, "
-                      "จำนวน: ${product["qty"]!.text}",
-                    );
-                  }
+                  final result = productControllers
+                      .map(
+                        (p) => {
+                          "name": p["name"]!.text.trim(),
+                          "qty": p["qty"]!.text.trim(),
+                        },
+                      )
+                      .where(
+                        (p) => p["name"]!.isNotEmpty && p["qty"]!.isNotEmpty,
+                      )
+                      .toList();
+                  Navigator.pop(context, result);
                 },
-                child: const Text(
-                  "ยืนยันการเพิ่มสินค้า",
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
+                child: const Text("ยืนยัน"),
               ),
             ),
           ],

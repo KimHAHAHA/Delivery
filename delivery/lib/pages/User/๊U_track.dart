@@ -1,22 +1,45 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery/pages/User/U_detail_track.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/get_navigation.dart';
+import 'package:get/get.dart';
 
 class UTrackPage extends StatelessWidget {
   const UTrackPage({super.key});
 
+  String _statusText(int status) {
+    switch (status) {
+      case 1:
+        return "รอไรเดอร์รับสินค้า";
+      case 2:
+        return "กำลังเดินทางมารับสินค้า";
+      case 3:
+        return "ไรเดอร์รับสินค้าแล้ว กำลังจัดส่ง";
+      case 4:
+        return "จัดส่งสำเร็จ";
+      default:
+        return "ไม่ทราบสถานะ";
+    }
+  }
+
+  Color _statusColor(int status) {
+    switch (status) {
+      case 1:
+        return Colors.orange;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.purple;
+      case 4:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // mock data
-    final List<Map<String, String>> orders = [
-      {"rider": "สมชาย", "phone": "0817778522", "status": "[2]"},
-      {"rider": "สมชาย", "phone": "0817778522", "status": "[2]"},
-      {"rider": "สมชาย", "phone": "0817778522", "status": "[2]"},
-    ];
-
     return Scaffold(
-      backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
+      backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
@@ -28,87 +51,145 @@ class UTrackPage extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        iconTheme: const IconThemeData(color: Color.fromARGB(255, 0, 0, 0)),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: orders.length,
-        itemBuilder: (context, index) {
-          final order = orders[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // รูป (แทนด้วย Box สีเทา)
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                const SizedBox(width: 12),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection("orders")
+            .orderBy("createdAt", descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                // ข้อมูลคำสั่งซื้อ
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "ชื่อไรเดอร์: ${order["rider"]}",
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "ยังไม่มีรายการติดตาม",
+                style: TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+            );
+          }
+
+          final orders = snapshot.data!.docs;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              final order = orders[index].data() as Map<String, dynamic>;
+              final orderId = orders[index].id;
+              final riderName = order["rider_name"] ?? "ยังไม่มีไรเดอร์";
+              final riderPhone = order["rider_phone"] ?? "-";
+              final status = order["status"] ?? 1;
+              final imageUrl = order["image_url"] ?? "";
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ✅ รูปภาพสินค้า
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(8),
+                        image: imageUrl.isNotEmpty
+                            ? DecorationImage(
+                                image: NetworkImage(imageUrl),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
                       ),
-                      Text(
-                        "เบอร์โทรไรเดอร์: ${order["phone"]}",
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      Text(
-                        "สถานะ: ${order["status"]}",
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.black87,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
+                      child: imageUrl.isEmpty
+                          ? const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 40,
+                              color: Colors.grey,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+
+                    // ✅ ข้อมูลออเดอร์
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "ชื่อไรเดอร์: $riderName",
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          onPressed: () {
-                            Get.to(() => const UDetailTrackPage());
-                          },
-                          child: const Text("รายละเอียด"),
-                        ),
+                          Text(
+                            "เบอร์โทร: $riderPhone",
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          Row(
+                            children: [
+                              const Text(
+                                "สถานะ: ",
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              Text(
+                                _statusText(status),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: _statusColor(status),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          // ✅ ปุ่มไปหน้ารายละเอียด
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black87,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              onPressed: () {
+                                Get.to(
+                                  () => UDetailTrackPage(orderId: orderId),
+                                );
+                              },
+                              child: const Text("รายละเอียด"),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),

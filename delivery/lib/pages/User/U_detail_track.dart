@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class UDetailTrackPage extends StatelessWidget {
   final String orderId; // ✅ รับ orderId
@@ -73,9 +75,24 @@ class UDetailTrackPage extends StatelessWidget {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final status = data["status"] ?? 1;
 
+          final riderLoc = data["rider_location"];
+          final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
+          final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
+
+          // ✅ พิกัดของผู้รับ
+          LatLng receiverPos = LatLng(receiverLat, receiverLng);
+
+          // ✅ พิกัดของไรเดอร์ (อาจเป็น null ตอนยังไม่รับงาน)
+          LatLng? riderPos = riderLoc != null
+              ? LatLng(
+                  (riderLoc["lat"] ?? 0).toDouble(),
+                  (riderLoc["lng"] ?? 0).toDouble(),
+                )
+              : null;
+
           return Column(
             children: [
-              // ✅ แถบสถานะ
+              // ✅ แถบสถานะด้านบน
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.symmetric(
@@ -114,99 +131,91 @@ class UDetailTrackPage extends StatelessWidget {
                 ),
               ),
 
-              // ✅ แผนที่ (placeholder)
+              // ✅ แผนที่เรียลไทม์
               Expanded(
-                child: Stack(
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: riderPos ?? receiverPos,
+                    initialZoom: 14,
+                  ),
                   children: [
-                    Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.map, size: 150, color: Colors.grey),
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                      userAgentPackageName: 'net.delivery.user',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        // จุดไรเดอร์
+                        if (riderPos != null)
+                          Marker(
+                            point: riderPos,
+                            child: const Icon(
+                              Icons.delivery_dining,
+                              color: Colors.blue,
+                              size: 40,
+                            ),
+                          ),
+                        // จุดผู้รับ
+                        Marker(
+                          point: receiverPos,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // ✅ ข้อมูลไรเดอร์
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CircleAvatar(
+                      radius: 28,
+                      backgroundImage: AssetImage("assets/images/profile.png"),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
+                          const SizedBox(height: 4),
+                          Text("ยานพาหนะ: ${data["vehicle"] ?? "-"}"),
+                          const SizedBox(height: 6),
+                          Text(
+                            "สินค้า: ${data["products"] != null && data["products"].isNotEmpty ? data["products"][0]["name"] : "-"}",
+                          ),
+                        ],
                       ),
                     ),
-
-                    // ✅ ข้อมูลไรเดอร์
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        margin: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 6,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const CircleAvatar(
-                              radius: 28,
-                              backgroundImage: AssetImage(
-                                "assets/images/profile.png",
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-
-                            // ✅ ข้อมูลข้อความ
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        "สถานะ: [$status]",
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.phone, size: 16),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text("ยานพาหนะ: ${data["vehicle"] ?? "-"}"),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    "รายละเอียดสินค้า: ${data["products"] != null && data["products"].isNotEmpty ? data["products"][0]["name"] : "-"}",
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const Icon(
-                              Icons.directions_bike,
-                              size: 32,
-                              color: Colors.black87,
-                            ),
-                          ],
-                        ),
-                      ),
+                    const Icon(
+                      Icons.directions_bike,
+                      size: 32,
+                      color: Colors.black87,
                     ),
                   ],
                 ),

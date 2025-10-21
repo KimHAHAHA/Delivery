@@ -3,7 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery/pages/Rider/R_home.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RTrackPage extends StatefulWidget {
@@ -18,6 +21,8 @@ class RTrackPage extends StatefulWidget {
 class _RTrackPageState extends State<RTrackPage> {
   File? statusImage;
   bool isLoading = false;
+  MapController mapController = MapController();
+  Position? currentPosition;
 
   // ✅ ฟังก์ชันเลือกภาพจากกล้อง
   Future<void> _pickImage() async {
@@ -52,6 +57,43 @@ class _RTrackPageState extends State<RTrackPage> {
     }
   }
 
+  // ✅ ดึงตำแหน่งปัจจุบันและอัปเดต Firestore แบบเรียลไทม์
+  Future<void> _trackLocationRealtime() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever)
+      return;
+
+    Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // อัปเดตทุก 5 เมตร
+      ),
+    ).listen((Position position) {
+      currentPosition = position;
+
+      // ✅ อัปเดต Firestore
+      FirebaseFirestore.instance
+          .collection("orders")
+          .doc(widget.orderId)
+          .update({
+            "rider_location": {
+              "lat": position.latitude,
+              "lng": position.longitude,
+            },
+          });
+
+      // ✅ ขยับกล้องบนแผนที่
+      mapController.move(
+        LatLng(position.latitude, position.longitude),
+        mapController.camera.zoom,
+      );
+    });
+  }
+
   // ✅ อัปเดตสถานะสินค้า
   Future<void> _updateStatus(Map<String, dynamic> data) async {
     if (isLoading) return;
@@ -63,7 +105,7 @@ class _RTrackPageState extends State<RTrackPage> {
           .doc(widget.orderId);
 
       int status = data["status"] ?? 2;
-      int newStatus = status + 1; // ขยับสถานะ
+      int newStatus = status + 1;
 
       String? imageUrl;
       if (statusImage != null) {
@@ -79,7 +121,6 @@ class _RTrackPageState extends State<RTrackPage> {
       await docRef.update(updateData);
 
       if (newStatus >= 4) {
-        // ส่งสำเร็จ กลับหน้า Home
         Get.snackbar(
           "สำเร็จ",
           "อัปเดตสถานะเป็นส่งสำเร็จแล้ว!",
@@ -109,6 +150,12 @@ class _RTrackPageState extends State<RTrackPage> {
         colorText: Colors.white,
       );
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _trackLocationRealtime();
   }
 
   @override
@@ -147,133 +194,156 @@ class _RTrackPageState extends State<RTrackPage> {
 
           final receiver = data["receiver_name"] ?? "-";
           final address = data["receiver_address"] ?? "-";
-          final products = data["products"] ?? [];
+          final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
+          final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
           final status = data["status"] ?? 1;
 
           String statusText = switch (status) {
             1 => "[1] รอไรเดอร์มารับสินค้า",
-            2 => "[2] ไรเดอร์รับงาน (กำลังเดินทางมารับสินค้า)",
-            3 => "[3] ไรเดอร์รับสินค้าแล้วและกำลังเดินทางไปส่ง",
-            4 => "[4] ไรเดอร์นำส่งสินค้าแล้ว",
+            2 => "[2] กำลังเดินทางไปรับของ",
+            3 => "[3] กำลังนำส่งสินค้า",
+            4 => "[4] ส่งสำเร็จแล้ว",
             _ => "ไม่ทราบสถานะ",
           };
 
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ✅ Mock map
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 220,
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: Icon(Icons.map, size: 100, color: Colors.grey),
+          final riderLoc = data["rider_location"];
+          LatLng riderPosition = riderLoc != null
+              ? LatLng(riderLoc["lat"], riderLoc["lng"])
+              : LatLng(13.736717, 100.523186);
+          LatLng receiverPosition = LatLng(receiverLat, receiverLng);
+
+          return Column(
+            children: [
+              // ✅ แผนที่เรียลไทม์
+              Expanded(
+                child: FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: riderPosition,
+                    initialZoom: 14,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                      userAgentPackageName: 'net.delivery.app',
                     ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                Text(
-                  "ผู้รับ: $receiver",
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(address),
-                const SizedBox(height: 10),
-
-                const Text(
-                  "รายการสินค้า:",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                ...products.map((p) => Text("- ${p["name"]} (${p["qty"]})")),
-
-                const SizedBox(height: 16),
-                Text(
-                  statusText,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ✅ ช่องเพิ่มรูปสถานะ
-                GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    height: 150,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade400),
-                    ),
-                    child: statusImage == null
-                        ? const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.camera_alt,
-                                  size: 40,
-                                  color: Colors.grey,
-                                ),
-                                SizedBox(height: 8),
-                                Text("แตะเพื่อถ่ายภาพประกอบสถานะ"),
-                              ],
-                            ),
-                          )
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              statusImage!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                            ),
+                    MarkerLayer(
+                      markers: [
+                        // จุดไรเดอร์
+                        Marker(
+                          point: riderPosition,
+                          child: const Icon(
+                            Icons.delivery_dining,
+                            color: Colors.blue,
+                            size: 40,
                           ),
-                  ),
+                        ),
+                        // จุดผู้รับ
+                        Marker(
+                          point: receiverPosition,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
+              ),
 
-                const Spacer(),
-
-                // ✅ ปุ่มอัปเดตสถานะ
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: status >= 4 ? Colors.grey : Colors.blue,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              // ✅ ข้อมูลและปุ่ม
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "ผู้รับ: $receiver",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
-                    onPressed: status >= 4 ? null : () => _updateStatus(data),
-                    child: isLoading
-                        ? const CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          )
-                        : Text(
-                            status == 2
-                                ? "ถึงจุดรับของแล้ว"
-                                : status == 3
-                                ? "ส่งสำเร็จ"
-                                : "อัปเดตสถานะ",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                            ),
+                    Text(address),
+                    const SizedBox(height: 8),
+                    Text(
+                      statusText,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: statusImage == null
+                            ? const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.camera_alt,
+                                      size: 40,
+                                      color: Colors.grey,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text("แตะเพื่อถ่ายภาพประกอบสถานะ"),
+                                  ],
+                                ),
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.file(
+                                  statusImage!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: status >= 4
+                              ? Colors.grey
+                              : Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                  ),
+                        ),
+                        onPressed: status >= 4
+                            ? null
+                            : () => _updateStatus(data),
+                        child: isLoading
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              )
+                            : const Text(
+                                "อัปเดตสถานะ",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),

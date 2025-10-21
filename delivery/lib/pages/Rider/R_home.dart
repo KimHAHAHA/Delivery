@@ -18,6 +18,7 @@ class RHomePage extends StatefulWidget {
 class _RHomePageState extends State<RHomePage> {
   int _selectedIndex = 0;
   Position? currentPosition;
+  bool isAccepting = false;
 
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _RHomePageState extends State<RHomePage> {
     _getCurrentPosition();
   }
 
+  // ✅ ดึงพิกัดปัจจุบันของไรเดอร์
   Future<void> _getCurrentPosition() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -55,6 +57,7 @@ class _RHomePageState extends State<RHomePage> {
     }
   }
 
+  // ✅ แถบล่างเปลี่ยนหน้า
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
     if (index == 0) {
@@ -64,7 +67,7 @@ class _RHomePageState extends State<RHomePage> {
     }
   }
 
-  // ✅ ฟังก์ชันคำนวณระยะทาง
+  // ✅ คำนวณระยะทางจากตำแหน่งปัจจุบัน
   String _distanceText(double lat, double lng) {
     if (currentPosition == null) return "";
     final distance = const Distance().as(
@@ -72,15 +75,21 @@ class _RHomePageState extends State<RHomePage> {
       LatLng(currentPosition!.latitude, currentPosition!.longitude),
       LatLng(lat, lng),
     );
+    if (distance > 1000) {
+      return "${(distance / 1000).toStringAsFixed(2)} กม.";
+    }
     return "${distance.toStringAsFixed(0)} เมตร";
   }
 
-  // ✅ ฟังก์ชันรับงาน (Transaction)
+  // ✅ ฟังก์ชันรับงาน (Transaction ป้องกันแย่งงาน)
   Future<void> _acceptJob(
     String orderId,
     Map<String, dynamic> orderData,
     RiderProvider rider,
   ) async {
+    if (isAccepting) return;
+    isAccepting = true;
+
     final ref = FirebaseFirestore.instance.collection('orders').doc(orderId);
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
@@ -94,31 +103,38 @@ class _RHomePageState extends State<RHomePage> {
 
         final data = snap.data() as Map<String, dynamic>;
         if (data['status'] != 1 || data['rider_id'] != null) {
-          throw "งานนี้มีคนรับไปแล้ว";
+          throw "งานนี้มีไรเดอร์รับไปแล้ว";
         }
 
         tx.update(ref, {
-          "status": 2,
+          "status": 2, // ไรเดอร์รับงาน
           "rider_id": rider.uid,
           "rider_name": rider.username,
           "rider_phone": rider.phone,
+          "rider_image_url": rider.riderImageUrl ?? "",
           "rider_location": {
             "lat": currentPosition?.latitude ?? 0,
             "lng": currentPosition?.longitude ?? 0,
           },
+          "acceptedAt": FieldValue.serverTimestamp(),
         });
       });
 
       if (Get.isDialogOpen ?? false) Get.back();
 
       Get.snackbar(
-        "สำเร็จ",
+        "✅ สำเร็จ",
         "รับงานเรียบร้อยแล้ว",
         backgroundColor: Colors.green,
         colorText: Colors.white,
+        icon: const Icon(Icons.check_circle, color: Colors.white),
       );
 
-      // ไปหน้า track ทันที
+      await Future.delayed(
+        const Duration(milliseconds: 500),
+      ); // 👈 รอ sync นิดหนึ่ง
+
+      // ไปหน้า track หลังรับงานสำเร็จ
       Get.to(() => RTrackPage(orderId: orderId));
     } catch (e) {
       if (Get.isDialogOpen ?? false) Get.back();
@@ -127,7 +143,10 @@ class _RHomePageState extends State<RHomePage> {
         "$e",
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        icon: const Icon(Icons.error, color: Colors.white),
       );
+    } finally {
+      isAccepting = false;
     }
   }
 
@@ -151,6 +170,7 @@ class _RHomePageState extends State<RHomePage> {
             .where("status", isEqualTo: 1)
             .where("rider_id", isNull: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -160,7 +180,7 @@ class _RHomePageState extends State<RHomePage> {
             return const Center(
               child: Text(
                 "ยังไม่มีงานรอรับ",
-                style: TextStyle(color: Colors.black54),
+                style: TextStyle(color: Colors.black54, fontSize: 16),
               ),
             );
           }
@@ -176,8 +196,8 @@ class _RHomePageState extends State<RHomePage> {
 
               final receiver = data["receiver_name"] ?? "-";
               final address = data["receiver_address"] ?? "-";
-              final lat = data["receiver_lat"]?.toDouble() ?? 0.0;
-              final lng = data["receiver_lng"]?.toDouble() ?? 0.0;
+              final lat = (data["receiver_lat"] ?? 0).toDouble();
+              final lng = (data["receiver_lng"] ?? 0).toDouble();
               final imageUrl =
                   data["image_url_status1"] ?? data["image_url"] ?? "";
 
@@ -185,7 +205,7 @@ class _RHomePageState extends State<RHomePage> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
@@ -198,6 +218,7 @@ class _RHomePageState extends State<RHomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ✅ รูปสินค้า
                     Row(
                       children: [
                         ClipRRect(
@@ -253,7 +274,10 @@ class _RHomePageState extends State<RHomePage> {
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 10),
+
+                    // ✅ ปุ่มรับงาน
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

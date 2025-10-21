@@ -185,6 +185,12 @@ class _UDeliveryListState extends State<UDeliveryList> {
         "receiver_lng": selectedAddress!['lng'],
         "products": products,
         "image_url": imageUrl ?? "",
+        "status": 1, // ✅ สถานะเริ่มต้น
+        "rider_id": null, // ✅ สำคัญมาก ต้องมี!
+        "rider_name": null,
+        "rider_phone": null,
+        "rider_image_url": null,
+        "rider_location": null,
         "createdAt": Timestamp.now(),
       });
 

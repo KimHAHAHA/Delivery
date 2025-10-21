@@ -210,7 +210,10 @@ class _AddressPageState extends State<AddressPage> {
                           ),
                           onPressed: () async {
                             try {
+                              // ✅ ดึงพิกัดปัจจุบัน
                               Position pos = await _determinePosition();
+
+                              // ✅ อัปเดตค่าใน TextField และ marker บนแผนที่
                               setState(() {
                                 selectedPosition = LatLng(
                                   pos.latitude,
@@ -219,16 +222,21 @@ class _AddressPageState extends State<AddressPage> {
                                 gpsController.text =
                                     "${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}";
                               });
+
+                              // ✅ แสดง snackbar แจ้งเตือน
                               Get.snackbar(
-                                'ตำแหน่งปัจจุบัน',
+                                'พิกัดปัจจุบัน',
                                 gpsController.text,
                                 backgroundColor: Colors.green,
                                 colorText: Colors.white,
                               );
+
+                              // ✅ ขยับแผนที่ไปตำแหน่งใหม่
+                              mapController.move(selectedPosition, 17);
                             } catch (e) {
                               Get.snackbar(
                                 'ผิดพลาด',
-                                'ไม่สามารถดึงตำแหน่งได้: $e',
+                                'ไม่สามารถดึงพิกัดได้: $e',
                                 backgroundColor: Colors.red,
                                 colorText: Colors.white,
                               );

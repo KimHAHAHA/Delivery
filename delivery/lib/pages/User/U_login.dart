@@ -211,14 +211,20 @@ class _ULoginPageState extends State<ULoginPage> {
       if (riderDoc.exists) {
         final storedPassword = riderDoc['password'] as String;
         if (hashedInput == storedPassword) {
-          final riderProvider = context.read<RiderProvider>();
-          riderProvider.setRiderData(
-            username: riderDoc['username'],
-            phone: riderDoc['phone'],
-            vehicleController: riderDoc['vehicleController'],
-            riderImageUrl: riderDoc['riderImageUrl'],
-            vehicleImageUrl: riderDoc['vehicleImageUrl'],
-          );
+          if (hashedInput == storedPassword) {
+            final riderProvider = context.read<RiderProvider>();
+
+            riderProvider.setRiderData(
+              uid: riderDoc.id, // ✅ เพิ่ม uid จาก Firestore
+              username: riderDoc['username'],
+              phone: riderDoc['phone'],
+              vehicleController: riderDoc['vehicleController'],
+              riderImageUrl: riderDoc['riderImageUrl'],
+              vehicleImageUrl: riderDoc['vehicleImageUrl'],
+            );
+
+            Get.offAll(() => const RHomePage()); // ✅ ไปหน้าไรเดอร์หลัก
+          }
 
           Get.snackbar(
             'สำเร็จ',

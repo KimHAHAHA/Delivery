@@ -173,13 +173,15 @@ class _ULoginPageState extends State<ULoginPage> {
           final address = addresses.isNotEmpty
               ? (addresses.first['detail'] ?? '')
               : 'ไม่มีที่อยู่';
+          final uid = userDoc.id; // ✅ เพิ่มบรรทัดนี้
 
           // ✅ บันทึกข้อมูลลง Provider
           context.read<UserProvider>().setUserData(
-            username: username,
-            phone: phone,
-            address: address,
-            imageUrl: imageUrl,
+            uid: uid, // 🔹 UID ของผู้ใช้จาก FirebaseAuth หรือ Firestore
+            username: username, // 🔹 ชื่อผู้ใช้
+            phone: phone, // 🔹 เบอร์โทรศัพท์
+            address: address, // 🔹 ที่อยู่เริ่มต้น (จาก Firestore)
+            imageUrl: imageUrl, // 🔹 รูปโปรไฟล์ (URL)
           );
 
           Get.snackbar(

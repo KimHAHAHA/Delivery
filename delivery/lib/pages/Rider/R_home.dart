@@ -19,75 +19,69 @@ class _RHomePageState extends State<RHomePage> {
   int _selectedIndex = 0;
   Position? currentPosition;
   bool isAccepting = false;
-  bool isListening = false;
 
   @override
   void initState() {
     super.initState();
-    _startLocationTracking();
+    _getCurrentPosition();
   }
 
-  /// ✅ ฟังก์ชันเปิดติดตามตำแหน่งแบบเรียลไทม์
-  Future<void> _startLocationTracking() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      Get.snackbar(
-        "ตำแหน่งปิดอยู่",
-        "กรุณาเปิด GPS ก่อนใช้งาน",
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      Get.snackbar(
-        "ไม่มีสิทธิ์เข้าถึง GPS",
-        "โปรดอนุญาตตำแหน่งให้แอป",
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      return;
-    }
-
-    // ✅ ใช้ stream ตำแหน่งแบบมี filter (ขยับเกิน 10 เมตรเท่านั้น)
-    if (!isListening) {
-      isListening = true;
-      Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium, // ลด noise
-          distanceFilter: 10, // ✅ อัปเดตก็ต่อเมื่อขยับเกิน 10 เมตร
-        ),
-      ).listen((Position pos) {
-        setState(() {
-          currentPosition = pos;
-        });
-      });
+  // ✅ ดึงพิกัดปัจจุบันของไรเดอร์
+  Future<void> _getCurrentPosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        Get.snackbar(
+          "ตำแหน่งปิดอยู่",
+          "กรุณาเปิด GPS ก่อนใช้งาน",
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+        return;
+      }
+      LocationPermission permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        Get.snackbar(
+          "ไม่มีสิทธิ์เข้าถึง GPS",
+          "โปรดอนุญาตตำแหน่งให้แอป",
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+      currentPosition = await Geolocator.getCurrentPosition();
+      setState(() {});
+    } catch (e) {
+      debugPrint("❌ Error getting location: $e");
     }
   }
 
-  /// ✅ คำนวณระยะทางจากตำแหน่งปัจจุบัน (กัน jitter <5m)
+  // ✅ แถบล่างเปลี่ยนหน้า
+  void _onItemTapped(int index) {
+    setState(() => _selectedIndex = index);
+    if (index == 0) {
+      Get.off(() => const RHomePage());
+    } else {
+      Get.to(() => const RProfilePage());
+    }
+  }
+
+  // ✅ คำนวณระยะทางจากตำแหน่งปัจจุบัน
   String _distanceText(double lat, double lng) {
     if (currentPosition == null) return "";
-    final distanceCalc = const Distance();
-
-    final distance = distanceCalc.as(
+    final distance = const Distance().as(
       LengthUnit.Meter,
       LatLng(currentPosition!.latitude, currentPosition!.longitude),
       LatLng(lat, lng),
     );
-
-    // ✅ ถ้าห่างน้อยกว่า 5 เมตร ให้ถือว่านิ่ง
-    if (distance < 5) return "0 เมตร";
-
-    return distance > 1000
-        ? "${(distance / 1000).toStringAsFixed(2)} กม."
-        : "${distance.toStringAsFixed(0)} เมตร";
+    if (distance > 1000) {
+      return "${(distance / 1000).toStringAsFixed(2)} กม.";
+    }
+    return "${distance.toStringAsFixed(0)} เมตร";
   }
 
-  /// ✅ ฟังก์ชันรับงาน (Transaction ป้องกันแย่งงาน)
+  // ✅ ฟังก์ชันรับงาน (Transaction ป้องกันแย่งงาน)
   Future<void> _acceptJob(
     String orderId,
     Map<String, dynamic> orderData,
@@ -96,6 +90,41 @@ class _RHomePageState extends State<RHomePage> {
     if (isAccepting) return;
     isAccepting = true;
 
+    // ✅ ตรวจพิกัดผู้ส่ง
+    final senderLat = (orderData["sender_lat"] ?? 0).toDouble();
+    final senderLng = (orderData["sender_lng"] ?? 0).toDouble();
+
+    if (currentPosition == null) {
+      Get.snackbar(
+        "ไม่สามารถรับงานได้",
+        "ไม่พบตำแหน่งปัจจุบันของคุณ",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      isAccepting = false;
+      return;
+    }
+
+    // ✅ คำนวณระยะทางจากไรเดอร์ → ผู้ส่ง
+    final distance = const Distance().as(
+      LengthUnit.Meter,
+      LatLng(currentPosition!.latitude, currentPosition!.longitude),
+      LatLng(senderLat, senderLng),
+    );
+
+    // ✅ บังคับให้อยู่ใกล้ผู้ส่งไม่เกิน 20 เมตรถึงจะรับได้
+    if (distance > 20) {
+      Get.snackbar(
+        "อยู่ไกลจากจุดรับของเกินไป",
+        "ต้องอยู่ในระยะไม่เกิน 20 เมตรถึงจะรับงานได้ (ตอนนี้ ${distance.toStringAsFixed(0)} เมตร)",
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      isAccepting = false;
+      return;
+    }
+
+    // ✅ ถ้าผ่านเงื่อนไข → ดำเนินการรับงานปกติ
     final ref = FirebaseFirestore.instance.collection('orders').doc(orderId);
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
@@ -127,17 +156,14 @@ class _RHomePageState extends State<RHomePage> {
       });
 
       if (Get.isDialogOpen ?? false) Get.back();
-
       Get.snackbar(
         "✅ สำเร็จ",
         "รับงานเรียบร้อยแล้ว",
         backgroundColor: Colors.green,
         colorText: Colors.white,
-        icon: const Icon(Icons.check_circle, color: Colors.white),
       );
 
       await Future.delayed(const Duration(milliseconds: 500));
-
       Get.to(() => RTrackPage(orderId: orderId));
     } catch (e) {
       if (Get.isDialogOpen ?? false) Get.back();
@@ -146,20 +172,9 @@ class _RHomePageState extends State<RHomePage> {
         "$e",
         backgroundColor: Colors.red,
         colorText: Colors.white,
-        icon: const Icon(Icons.error, color: Colors.white),
       );
     } finally {
       isAccepting = false;
-    }
-  }
-
-  /// ✅ แถบล่างเปลี่ยนหน้า
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
-    if (index == 0) {
-      Get.off(() => const RHomePage());
-    } else {
-      Get.to(() => const RProfilePage());
     }
   }
 
@@ -183,6 +198,7 @@ class _RHomePageState extends State<RHomePage> {
             .where("status", isEqualTo: 1)
             .where("rider_id", isNull: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -206,10 +222,10 @@ class _RHomePageState extends State<RHomePage> {
               final doc = jobs[index];
               final data = doc.data() as Map<String, dynamic>;
 
-              final receiver = data["receiver_name"] ?? "-";
-              final address = data["receiver_address"] ?? "-";
-              final lat = (data["receiver_lat"] ?? 0).toDouble();
-              final lng = (data["receiver_lng"] ?? 0).toDouble();
+              final sender = data["sender_name"] ?? "-";
+              final address = data["sender_address"] ?? "-";
+              final lat = (data["sender_lat"] ?? 0).toDouble();
+              final lng = (data["sender_lng"] ?? 0).toDouble();
               final imageUrl =
                   data["image_url_status1"] ?? data["image_url"] ?? "";
 
@@ -258,7 +274,7 @@ class _RHomePageState extends State<RHomePage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                receiver,
+                                sender,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,

@@ -63,6 +63,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       // ✅ update Provider
       userProvider.setUserData(
+        uid: userProvider.uid ?? "",
         username: username,
         phone: phone,
         address: userProvider.address ?? "",

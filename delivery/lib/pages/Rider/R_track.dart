@@ -23,7 +23,7 @@ class _RTrackPageState extends State<RTrackPage> {
   bool isLoading = false;
   final MapController mapController = MapController();
   Position? currentPosition;
-  DateTime? _lastUpdateTime; // ✅ ใช้กัน spam เขียน Firestore
+  DateTime? _lastUpdateTime;
 
   @override
   void initState() {
@@ -64,7 +64,7 @@ class _RTrackPageState extends State<RTrackPage> {
     }
   }
 
-  // ✅ ติดตามตำแหน่งเรียลไทม์ พร้อมกรองและหน่วงเวลา
+  // ✅ ติดตามตำแหน่งไรเดอร์แบบเรียลไทม์
   Future<void> _trackLocationRealtime() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -91,12 +91,11 @@ class _RTrackPageState extends State<RTrackPage> {
 
     Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium, // ✅ ลด noise
-        distanceFilter: 10, // ✅ อัปเดตเมื่อขยับเกิน 10 เมตร
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
       ),
     ).listen((Position position) {
       final now = DateTime.now();
-      // ✅ เขียน Firestore แค่ทุก 5 วิ
       if (_lastUpdateTime == null ||
           now.difference(_lastUpdateTime!).inSeconds >= 5) {
         _lastUpdateTime = now;
@@ -111,18 +110,16 @@ class _RTrackPageState extends State<RTrackPage> {
                 "lng": position.longitude,
               },
             });
-        // ✅ ขยับกล้องแบบปลอดภัยใน flutter_map 4+
-        mapController.mapEventStream.first.then((_) {
-          mapController.move(
-            LatLng(position.latitude, position.longitude),
-            mapController.camera.zoom,
-          );
-        });
+
+        mapController.move(
+          LatLng(position.latitude, position.longitude),
+          mapController.camera.zoom,
+        );
       }
     });
   }
 
-  // ✅ อัปเดตสถานะสินค้า
+  // ✅ อัปเดตสถานะการจัดส่ง
   Future<void> _updateStatus(Map<String, dynamic> data) async {
     if (isLoading) return;
     setState(() => isLoading = true);
@@ -141,28 +138,28 @@ class _RTrackPageState extends State<RTrackPage> {
       }
 
       final updateData = {"status": newStatus, "updatedAt": Timestamp.now()};
-
       if (imageUrl != null) {
         updateData["image_url_status$newStatus"] = imageUrl;
       }
 
       await docRef.update(updateData);
 
+      String message = switch (newStatus) {
+        2 => "กำลังไปรับของจากผู้ส่ง...",
+        3 => "รับของแล้ว กำลังจัดส่งให้ผู้รับ...",
+        4 => "ส่งสำเร็จแล้ว!",
+        _ => "อัปเดตสถานะเรียบร้อย",
+      };
+
+      Get.snackbar(
+        "สำเร็จ",
+        message,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+
       if (newStatus >= 4) {
-        Get.snackbar(
-          "สำเร็จ",
-          "อัปเดตสถานะเป็นส่งสำเร็จแล้ว!",
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-        );
         Get.offAll(() => const RHomePage());
-      } else {
-        Get.snackbar(
-          "สำเร็จ",
-          "อัปเดตสถานะเป็น [$newStatus] แล้ว",
-          backgroundColor: Colors.blue,
-          colorText: Colors.white,
-        );
       }
 
       setState(() {
@@ -185,7 +182,6 @@ class _RTrackPageState extends State<RTrackPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
         title: const Text(
@@ -209,29 +205,42 @@ class _RTrackPageState extends State<RTrackPage> {
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
-          final receiver = data["receiver_name"] ?? "-";
-          final address = data["receiver_address"] ?? "-";
-          final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
-          final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
           final status = data["status"] ?? 1;
 
-          String statusText = switch (status) {
-            1 => "[1] รอไรเดอร์มารับสินค้า",
-            2 => "[2] กำลังเดินทางไปรับของ",
-            3 => "[3] กำลังนำส่งสินค้า",
-            4 => "[4] ส่งสำเร็จแล้ว",
-            _ => "ไม่ทราบสถานะ",
-          };
+          // ✅ เลือกพิกัดเป้าหมายตามสถานะ
+          final targetLat = status == 2
+              ? (data["sender_lat"] ?? 0).toDouble()
+              : (data["receiver_lat"] ?? 0).toDouble();
 
+          final targetLng = status == 2
+              ? (data["sender_lng"] ?? 0).toDouble()
+              : (data["receiver_lng"] ?? 0).toDouble();
+
+          final targetName = status == 2
+              ? data["sender_name"] ?? "-"
+              : data["receiver_name"];
+          final targetAddress = status == 2
+              ? data["sender_address"] ?? "-"
+              : data["receiver_address"];
+
+          // ✅ แปลงเป็น LatLng
+          LatLng targetPosition = LatLng(targetLat, targetLng);
           final riderLoc = data["rider_location"];
           LatLng riderPosition = riderLoc != null
               ? LatLng(riderLoc["lat"], riderLoc["lng"])
               : LatLng(13.736717, 100.523186);
-          LatLng receiverPosition = LatLng(receiverLat, receiverLng);
+
+          String statusText = switch (status) {
+            1 => "[1] รอไรเดอร์มารับสินค้า",
+            2 => "[2] กำลังเดินทางไปรับของจากผู้ส่ง",
+            3 => "[3] กำลังนำส่งสินค้าให้ผู้รับ",
+            4 => "[4] ส่งสำเร็จแล้ว",
+            _ => "ไม่ทราบสถานะ",
+          };
 
           return Column(
             children: [
-              // ✅ แผนที่เรียลไทม์
+              // ✅ แผนที่
               Expanded(
                 child: FlutterMap(
                   mapController: mapController,
@@ -247,7 +256,6 @@ class _RTrackPageState extends State<RTrackPage> {
                     ),
                     MarkerLayer(
                       markers: [
-                        // จุดไรเดอร์
                         Marker(
                           point: riderPosition,
                           child: const Icon(
@@ -256,9 +264,8 @@ class _RTrackPageState extends State<RTrackPage> {
                             size: 40,
                           ),
                         ),
-                        // จุดผู้รับ
                         Marker(
-                          point: receiverPosition,
+                          point: targetPosition,
                           child: const Icon(
                             Icons.location_on,
                             color: Colors.red,
@@ -271,7 +278,7 @@ class _RTrackPageState extends State<RTrackPage> {
                 ),
               ),
 
-              // ✅ ข้อมูลและปุ่ม
+              // ✅ ข้อมูลปลายทางและปุ่มอัปเดต
               Container(
                 color: Colors.white,
                 padding: const EdgeInsets.all(16),
@@ -279,13 +286,13 @@ class _RTrackPageState extends State<RTrackPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "ผู้รับ: $receiver",
+                      "ปลายทาง: $targetName",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
                     ),
-                    Text(address),
+                    Text(targetAddress),
                     const SizedBox(height: 8),
                     Text(
                       statusText,

@@ -86,6 +86,7 @@ class _EditImagePageState extends State<EditImagePage> {
 
       // ✅ อัปเดต Provider
       userProvider.setUserData(
+        uid: userProvider.uid ?? "",
         username: userProvider.username ?? "",
         phone: userProvider.phone ?? "",
         address: userProvider.address ?? "",

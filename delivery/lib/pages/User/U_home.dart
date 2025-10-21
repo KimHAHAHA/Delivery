@@ -38,6 +38,7 @@ class _UHomePageState extends State<UHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = context.read<UserProvider>();
     final username = context.watch<UserProvider>().username ?? "...";
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
@@ -91,7 +92,7 @@ class _UHomePageState extends State<UHomePage> {
                   ),
                 ),
                 onPressed: () {
-                  Get.to(() => UDeliveryList());
+                  Get.to(() => UDeliveryList(uid: userProvider.uid!));
                 },
                 child: const Text(
                   "ส่งพัสดุ",

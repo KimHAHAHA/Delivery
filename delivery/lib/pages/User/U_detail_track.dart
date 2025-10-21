@@ -46,49 +46,45 @@ class UDetailTrackPage extends StatelessWidget {
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "ติดตามการส่ง",
+          "ติดตามการส่งสินค้า",
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
+        centerTitle: true,
       ),
+
+      // ✅ Stream หลักสำหรับออเดอร์นี้
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
             .doc(orderId)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          if (!snapshot.data!.exists) {
             return const Center(child: Text("ไม่พบข้อมูลออเดอร์นี้"));
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final status = data["status"] ?? 1;
-
-          final riderLoc = data["rider_location"];
           final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
           final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
 
-          // ✅ พิกัดของผู้รับ
           LatLng receiverPos = LatLng(receiverLat, receiverLng);
-
-          // ✅ พิกัดของไรเดอร์ (อาจเป็น null ตอนยังไม่รับงาน)
-          LatLng? riderPos = riderLoc != null
-              ? LatLng(
-                  (riderLoc["lat"] ?? 0).toDouble(),
-                  (riderLoc["lng"] ?? 0).toDouble(),
-                )
-              : null;
 
           return Column(
             children: [
@@ -131,47 +127,76 @@ class UDetailTrackPage extends StatelessWidget {
                 ),
               ),
 
-              // ✅ แผนที่เรียลไทม์
+              // ✅ แผนที่แสดง Rider หลายคนแบบ Real-time
               Expanded(
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: riderPos ?? receiverPos,
-                    initialZoom: 14,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
-                      userAgentPackageName: 'net.delivery.user',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        // จุดไรเดอร์
-                        if (riderPos != null)
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("orders")
+                      .where("status", isGreaterThanOrEqualTo: 2)
+                      .where("status", isLessThanOrEqualTo: 3)
+                      .snapshots(),
+                  builder: (context, riderSnap) {
+                    if (!riderSnap.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final riderDocs = riderSnap.data!.docs;
+
+                    // ✅ รวม marker ของ rider ทุกคน
+                    final List<Marker> markers = [];
+
+                    for (var doc in riderDocs) {
+                      final rData = doc.data() as Map<String, dynamic>;
+                      final loc = rData["rider_location"];
+                      if (loc != null &&
+                          loc["lat"] != null &&
+                          loc["lng"] != null) {
+                        markers.add(
                           Marker(
-                            point: riderPos,
+                            point: LatLng(
+                              (loc["lat"] ?? 0).toDouble(),
+                              (loc["lng"] ?? 0).toDouble(),
+                            ),
                             child: const Icon(
                               Icons.delivery_dining,
                               color: Colors.blue,
-                              size: 40,
+                              size: 38,
                             ),
                           ),
-                        // จุดผู้รับ
-                        Marker(
-                          point: receiverPos,
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Colors.red,
-                            size: 40,
-                          ),
+                        );
+                      }
+                    }
+
+                    // ✅ เพิ่ม marker จุดผู้รับ
+                    markers.add(
+                      Marker(
+                        point: receiverPos,
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Colors.red,
+                          size: 42,
                         ),
+                      ),
+                    );
+
+                    return FlutterMap(
+                      options: MapOptions(
+                        initialCenter: receiverPos,
+                        initialZoom: 13,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                        ),
+                        MarkerLayer(markers: markers),
                       ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
 
-              // ✅ ข้อมูลไรเดอร์
+              // ✅ ข้อมูลไรเดอร์ (เฉพาะของออเดอร์นี้)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -185,9 +210,14 @@ class UDetailTrackPage extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 28,
-                      backgroundImage: AssetImage("assets/images/profile.png"),
+                      backgroundImage:
+                          data["rider_image_url"] != null &&
+                              data["rider_image_url"].toString().isNotEmpty
+                          ? NetworkImage(data["rider_image_url"])
+                          : const AssetImage("assets/images/profile.png")
+                                as ImageProvider,
                     ),
                     const SizedBox(width: 12),
                     Expanded(

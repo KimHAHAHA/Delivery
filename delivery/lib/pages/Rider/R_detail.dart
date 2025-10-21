@@ -29,25 +29,39 @@ class _RDetailPageState extends State<RDetailPage> {
     }
   }
 
-  // ✅ ฟังก์ชันรับงาน
+  /// ✅ ฟังก์ชันรับงาน
   Future<void> _acceptJob(Map<String, dynamic> data) async {
     if (isLoading) return;
     setState(() => isLoading = true);
 
     final rider = context.read<RiderProvider>();
+    final docRef = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.orderId);
 
     try {
-      final docRef = FirebaseFirestore.instance
-          .collection('orders')
-          .doc(widget.orderId);
+      // ตรวจสอบว่ามีคนรับไปแล้วหรือยัง
+      final snapshot = await docRef.get();
+      final current = snapshot.data() as Map<String, dynamic>?;
+      if (current == null || current["status"] != 1) {
+        Get.snackbar(
+          "⚠️ งานนี้ไม่ว่างแล้ว",
+          "มีไรเดอร์คนอื่นรับไปแล้ว",
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+        setState(() => isLoading = false);
+        return;
+      }
 
       await docRef.update({
-        'status': 2,
-        'rider_id': rider.uid,
-        'rider_name': rider.username,
+        "status": 2,
+        "rider_id": rider.uid,
+        "rider_name": rider.username,
+        "rider_phone": rider.phone,
         "vehicleController": rider.vehicleController ?? "-",
-        'rider_phone': rider.phone,
-        'acceptedAt': Timestamp.now(),
+        "rider_image_url": rider.riderImageUrl ?? "",
+        "acceptedAt": FieldValue.serverTimestamp(),
       });
 
       Get.snackbar(
@@ -84,7 +98,7 @@ class _RDetailPageState extends State<RDetailPage> {
             color: Colors.white,
             size: 22,
           ),
-          onPressed: () => Get.back(), // ✅ กลับหน้าก่อนหน้า
+          onPressed: () => Get.back(),
         ),
         title: const Text(
           "รายละเอียดงานจัดส่ง",
@@ -95,6 +109,8 @@ class _RDetailPageState extends State<RDetailPage> {
           ),
         ),
       ),
+
+      // ✅ ข้อมูลแบบเรียลไทม์
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -132,12 +148,12 @@ class _RDetailPageState extends State<RDetailPage> {
                         child: imageUrl.isNotEmpty
                             ? Image.network(
                                 imageUrl,
-                                height: 200,
+                                height: 220,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                               )
                             : Container(
-                                height: 200,
+                                height: 220,
                                 width: double.infinity,
                                 color: Colors.grey[300],
                                 child: const Icon(Icons.image, size: 50),
@@ -146,127 +162,74 @@ class _RDetailPageState extends State<RDetailPage> {
                       const SizedBox(height: 20),
 
                       // ✅ ข้อมูลผู้ส่ง
-                      Card(
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "ข้อมูลผู้ส่ง",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text("ชื่อ: $senderName"),
-                              Text("เบอร์: $senderPhone"),
-                            ],
-                          ),
-                        ),
+                      _infoCard(
+                        title: "ข้อมูลผู้ส่ง",
+                        titleColor: Colors.green,
+                        children: [
+                          Text("ชื่อ: $senderName"),
+                          Text("เบอร์: $senderPhone"),
+                        ],
                       ),
 
                       const SizedBox(height: 12),
 
                       // ✅ ข้อมูลผู้รับ
-                      Card(
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      _infoCard(
+                        title: "ข้อมูลผู้รับ",
+                        titleColor: Colors.blueAccent,
+                        children: [
+                          Text("ชื่อ: $receiverName"),
+                          Text("เบอร์: $receiverPhone"),
+                          const SizedBox(height: 8),
+                          const Row(
                             children: [
-                              const Text(
-                                "ข้อมูลผู้รับ",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blueAccent,
-                                ),
+                              Icon(
+                                Icons.location_on,
+                                color: Colors.red,
+                                size: 18,
                               ),
-                              const SizedBox(height: 6),
-                              Text("ชื่อ: $receiverName"),
-                              Text("เบอร์: $receiverPhone"),
-                              const SizedBox(height: 8),
-                              const Row(
-                                children: [
-                                  Icon(
-                                    Icons.location_on,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    "ที่อยู่จัดส่ง",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                              SizedBox(width: 6),
+                              Text(
+                                "ที่อยู่จัดส่ง",
+                                style: TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              Text(address),
                             ],
                           ),
-                        ),
+                          Text(address),
+                        ],
                       ),
 
                       const SizedBox(height: 12),
 
                       // ✅ รายการสินค้า
-                      Card(
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "รายการสินค้า",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.deepPurple,
+                      _infoCard(
+                        title: "รายการสินค้า",
+                        titleColor: Colors.deepPurple,
+                        children: [
+                          if (products.isEmpty)
+                            const Text("- ไม่มีข้อมูลสินค้า -")
+                          else
+                            ...products.map(
+                              (p) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(p["name"] ?? "-"),
+                                    Text(
+                                      "${p["qty"] ?? 1} ชิ้น",
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const Divider(),
-                              if (products.isEmpty)
-                                const Text("- ไม่มีข้อมูลสินค้า -")
-                              else
-                                ...products.map(
-                                  (p) => Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 3,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(p["name"] ?? "-"),
-                                        Text(
-                                          "${p["qty"] ?? 1} ชิ้น",
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -322,6 +285,8 @@ class _RDetailPageState extends State<RDetailPage> {
           );
         },
       ),
+
+      // ✅ Bottom Navigation
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -330,6 +295,36 @@ class _RDetailPageState extends State<RDetailPage> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "หน้าแรก"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "บัญชี"),
         ],
+      ),
+    );
+  }
+
+  /// ✅ widget ย่อยสำหรับแสดง Card สวย ๆ
+  Widget _infoCard({
+    required String title,
+    required Color titleColor,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: titleColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...children,
+          ],
+        ),
       ),
     );
   }

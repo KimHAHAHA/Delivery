@@ -46,217 +46,218 @@ class UDetailTrackPage extends StatelessWidget {
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "ติดตามการส่ง",
+          "ติดตามการส่งสินค้า",
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
+        centerTitle: true,
       ),
 
-      // ✅ ฟังการเปลี่ยนแปลงของ order แบบเรียลไทม์
+      // ✅ Stream หลักสำหรับออเดอร์นี้
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
             .doc(orderId)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
+          if (!snapshot.data!.exists) {
             return const Center(child: Text("ไม่พบข้อมูลออเดอร์นี้"));
           }
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final status = data["status"] ?? 1;
-          final riderId = data["rider_id"]; // ✅ ใช้เชื่อมกับคอลเลกชัน rider
 
-          final riderLoc = data["rider_location"];
-          final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
-          final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
+          // ✅ กำหนดเป้าหมายแผนที่ตามสถานะ
+          final double targetLat = status == 2
+              ? (data["sender_lat"] ?? 0).toDouble()
+              : (data["receiver_lat"] ?? 0).toDouble();
+          final double targetLng = status == 2
+              ? (data["sender_lng"] ?? 0).toDouble()
+              : (data["receiver_lng"] ?? 0).toDouble();
 
-          LatLng receiverPos = LatLng(receiverLat, receiverLng);
+          LatLng targetPos = LatLng(targetLat, targetLng);
 
-          LatLng? riderPos = riderLoc != null
-              ? LatLng(
-                  (riderLoc["lat"] ?? 0).toDouble(),
-                  (riderLoc["lng"] ?? 0).toDouble(),
-                )
-              : null;
-
-          // ✅ ถ้ายังไม่มี rider_id ใน order ให้แสดงข้อความ
-          if (riderId == null) {
-            return const Center(
-              child: Text("ยังไม่มีไรเดอร์รับงานนี้ในขณะนี้"),
-            );
-          }
-
-          // ✅ ดึงข้อมูลจาก collection rider
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection("rider")
-                .doc(riderId)
-                .get(),
-            builder: (context, riderSnapshot) {
-              if (riderSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (!riderSnapshot.hasData || !riderSnapshot.data!.exists) {
-                return const Center(child: Text("ไม่พบข้อมูลไรเดอร์"));
-              }
-
-              final riderData =
-                  riderSnapshot.data!.data() as Map<String, dynamic>;
-
-              // ✅ Log ข้อมูลไรเดอร์ทั้งหมด
-              print("🔥 Rider data: $riderData");
-              print("🚗 vehicleController = ${riderData["vehicleController"]}");
-
-              final riderName = riderData["username"] ?? "-";
-              final riderPhone = riderData["phone"] ?? "-";
-              final plate = riderData["vehicleController"] ?? "-";
-
-              return Column(
-                children: [
-                  // ✅ แถบสถานะด้านบน
-                  Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
+          return Column(
+            children: [
+              // ✅ แถบสถานะด้านบน
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: _statusColor(status),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: Colors.white,
+                      child: Text(
+                        "$status",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: _statusColor(status),
+                        ),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: _statusColor(status),
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _statusText(status),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: Colors.white,
-                          child: Text(
-                            "$status",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: _statusColor(status),
+                  ],
+                ),
+              ),
+
+              // ✅ แผนที่ Real-time แสดงไรเดอร์และเป้าหมาย (sender/receiver)
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("orders")
+                      .where("status", isGreaterThanOrEqualTo: 2)
+                      .where("status", isLessThanOrEqualTo: 3)
+                      .snapshots(),
+                  builder: (context, riderSnap) {
+                    if (!riderSnap.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final riderDocs = riderSnap.data!.docs;
+                    final List<Marker> markers = [];
+
+                    // ✅ Marker ของไรเดอร์ทั้งหมด
+                    for (var doc in riderDocs) {
+                      final rData = doc.data() as Map<String, dynamic>;
+                      final loc = rData["rider_location"];
+                      if (loc != null &&
+                          loc["lat"] != null &&
+                          loc["lng"] != null) {
+                        markers.add(
+                          Marker(
+                            point: LatLng(
+                              (loc["lat"] ?? 0).toDouble(),
+                              (loc["lng"] ?? 0).toDouble(),
+                            ),
+                            child: const Icon(
+                              Icons.delivery_dining,
+                              color: Colors.blue,
+                              size: 38,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _statusText(status),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        );
+                      }
+                    }
 
-                  // ✅ แผนที่เรียลไทม์
-                  Expanded(
-                    child: FlutterMap(
+                    // ✅ Marker ของจุดเป้าหมาย (เปลี่ยนตามสถานะ)
+                    markers.add(
+                      Marker(
+                        point: targetPos,
+                        child: Icon(
+                          Icons.location_on,
+                          color: status == 2 ? Colors.orange : Colors.red,
+                          size: 42,
+                        ),
+                      ),
+                    );
+
+                    return FlutterMap(
                       options: MapOptions(
-                        initialCenter: riderPos ?? receiverPos,
-                        initialZoom: 14,
+                        initialCenter: targetPos,
+                        initialZoom: 13,
                       ),
                       children: [
                         TileLayer(
                           urlTemplate:
                               'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
-                          userAgentPackageName: 'net.delivery.user',
                         ),
-                        MarkerLayer(
-                          markers: [
-                            if (riderPos != null)
-                              Marker(
-                                point: riderPos,
-                                child: const Icon(
-                                  Icons.delivery_dining,
-                                  color: Colors.blue,
-                                  size: 40,
-                                ),
-                              ),
-                            Marker(
-                              point: receiverPos,
-                              child: const Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 40,
-                              ),
-                            ),
-                          ],
-                        ),
+                        MarkerLayer(markers: markers),
                       ],
-                    ),
-                  ),
+                    );
+                  },
+                ),
+              ),
 
-                  // ✅ ข้อมูลไรเดอร์
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
+              // ✅ ข้อมูลไรเดอร์
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundImage:
+                          data["rider_image_url"] != null &&
+                              data["rider_image_url"].toString().isNotEmpty
+                          ? NetworkImage(data["rider_image_url"])
+                          : const AssetImage("assets/images/profile.png")
+                                as ImageProvider,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
+                          const SizedBox(height: 4),
+                          Text(
+                            "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? data["vehicle_number"] ?? "-"}",
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "สินค้า: ${data["products"] != null && data["products"].isNotEmpty ? data["products"][0]["name"] : "-"}",
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const CircleAvatar(
-                          radius: 28,
-                          backgroundImage: AssetImage(
-                            "assets/images/profile.png",
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "ชื่อไรเดอร์: $riderName",
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text("เบอร์โทร: $riderPhone"),
-                              const SizedBox(height: 4),
-                              Text("ป้ายทะเบียน: $plate"),
-                              const SizedBox(height: 6),
-                              Text(
-                                "สินค้า: ${data["products"] != null && data["products"].isNotEmpty ? data["products"][0]["name"] : "-"}",
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.directions_bike,
-                          size: 32,
-                          color: Colors.black87,
-                        ),
-                      ],
+                    const Icon(
+                      Icons.directions_bike,
+                      size: 32,
+                      color: Colors.black87,
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),

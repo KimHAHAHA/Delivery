@@ -42,7 +42,8 @@ class _UProfilePageState extends State<UProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userProvider = context.read<UserProvider>();
+    final userProvider = context.watch<UserProvider>();
+
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4), // เขียวอ่อน
       body: SafeArea(

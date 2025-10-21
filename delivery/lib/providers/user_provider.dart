@@ -24,6 +24,11 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void updateAddress(String newAddress) {
+    _address = newAddress;
+    notifyListeners();
+  }
+
   void clear() {
     _username = null;
     _phone = null;

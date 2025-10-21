@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:delivery/pages/Rider/R_detail.dart';
 import 'package:delivery/pages/Rider/R_proflie.dart';
 import 'package:delivery/pages/Rider/R_track.dart';
 import 'package:delivery/providers/rider_provider.dart';

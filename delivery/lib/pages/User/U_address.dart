@@ -1,10 +1,11 @@
-import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 class AddressPage extends StatefulWidget {
   final String username; // รับชื่อผู้ใช้ที่ล็อกอินมา
@@ -84,14 +85,19 @@ class _AddressPageState extends State<AddressPage> {
       }
     });
 
+    // ✅ อัปเดต Firestore
     await FirebaseFirestore.instance
         .collection('user')
         .doc(widget.username)
         .update({"addresses": addresses});
 
+    // ✅ อัปเดต Provider (แจ้งให้หน้าโปรไฟล์เปลี่ยนทันที)
+    final defaultAddress = addresses[index]["detail"];
+    context.read<UserProvider>().updateAddress(defaultAddress);
+
     Get.snackbar(
       "สำเร็จ",
-      "ตั้งค่าที่อยู่เริ่มต้นแล้ว",
+      "ตั้งค่าที่อยู่เริ่มต้นเรียบร้อยแล้ว",
       backgroundColor: Colors.green,
       colorText: Colors.white,
     );

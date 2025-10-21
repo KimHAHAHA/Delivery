@@ -205,7 +205,7 @@ class UDetailTrackPage extends StatelessWidget {
                           Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
                           const SizedBox(height: 4),
                           Text(
-                            "บ้ายทะเบียน: ${data["vehicleController"] ?? "-"}",
+                            "ป้ายทะเบียน: ${data["vehicleController"] ?? "-"}",
                           ),
                           const SizedBox(height: 6),
                           Text(

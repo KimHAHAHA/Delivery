@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:delivery/pages/Rider/R_detail.dart';
 import 'package:delivery/pages/Rider/R_proflie.dart';
 import 'package:delivery/pages/Rider/R_track.dart';
 import 'package:delivery/providers/rider_provider.dart';
@@ -146,6 +147,7 @@ class _RHomePageState extends State<RHomePage> {
           "rider_id": rider.uid,
           "rider_name": rider.username,
           "rider_phone": rider.phone,
+          "vehicleController": rider.vehicleController ?? "-",
           "rider_image_url": rider.riderImageUrl ?? "",
           "rider_location": {
             "lat": currentPosition?.latitude ?? 0,
@@ -229,103 +231,109 @@ class _RHomePageState extends State<RHomePage> {
               final imageUrl =
                   data["image_url_status1"] ?? data["image_url"] ?? "";
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ✅ รูปสินค้า
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: imageUrl.isNotEmpty
-                              ? Image.network(
-                                  imageUrl,
-                                  width: 70,
-                                  height: 70,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  width: 70,
-                                  height: 70,
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.inventory,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                sender,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                address,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.black54),
-                              ),
-                              if (lat != 0 &&
-                                  lng != 0 &&
-                                  currentPosition != null)
-                                Text(
-                                  "ระยะห่าง: ${_distanceText(lat, lng)}",
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // ✅ ปุ่มรับงาน
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
+              return GestureDetector(
+                onTap: () {
+                  // ✅ เปิดหน้า RDetailPage เมื่อคลิกที่งาน
+                  Get.to(() => RDetailPage(orderId: doc.id));
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ✅ รูปสินค้า
+                      Row(
+                        children: [
+                          ClipRRect(
                             borderRadius: BorderRadius.circular(8),
+                            child: imageUrl.isNotEmpty
+                                ? Image.network(
+                                    imageUrl,
+                                    width: 70,
+                                    height: 70,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    width: 70,
+                                    height: 70,
+                                    color: Colors.grey[300],
+                                    child: const Icon(
+                                      Icons.inventory,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
                           ),
-                        ),
-                        onPressed: () =>
-                            _acceptJob(doc.id, data, riderProvider),
-                        child: const Text(
-                          "รับงาน",
-                          style: TextStyle(fontSize: 16),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sender,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  address,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.black54),
+                                ),
+                                if (lat != 0 &&
+                                    lng != 0 &&
+                                    currentPosition != null)
+                                  Text(
+                                    "ระยะห่าง: ${_distanceText(lat, lng)}",
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // ✅ ปุ่มรับงาน
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: () =>
+                              _acceptJob(doc.id, data, riderProvider),
+                          child: const Text(
+                            "รับงาน",
+                            style: TextStyle(fontSize: 16),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             },

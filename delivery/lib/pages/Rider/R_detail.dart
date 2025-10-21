@@ -41,27 +41,26 @@ class _RDetailPageState extends State<RDetailPage> {
           .collection('orders')
           .doc(widget.orderId);
 
-      // อัปเดตสถานะและข้อมูลไรเดอร์
       await docRef.update({
-        'status': 2, // [2] ไรเดอร์รับงาน
+        'status': 2,
         'rider_id': rider.uid,
         'rider_name': rider.username,
+        "vehicleController": rider.vehicleController ?? "-",
         'rider_phone': rider.phone,
         'acceptedAt': Timestamp.now(),
       });
 
       Get.snackbar(
-        "สำเร็จ",
-        "คุณรับงานนี้เรียบร้อยแล้ว",
+        "✅ รับงานสำเร็จ",
+        "คุณได้รับงานนี้เรียบร้อยแล้ว",
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
 
-      // ไปหน้า TrackPage
       Get.off(() => RTrackPage(orderId: widget.orderId));
     } catch (e) {
       Get.snackbar(
-        "ผิดพลาด",
+        "❌ ผิดพลาด",
         "ไม่สามารถรับงานได้: $e",
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -76,21 +75,26 @@ class _RDetailPageState extends State<RDetailPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
-        automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
+          onPressed: () => Get.back(), // ✅ กลับหน้าก่อนหน้า
+        ),
         title: const Text(
-          "รายละเอียดสินค้า",
+          "รายละเอียดงานจัดส่ง",
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        centerTitle: true,
       ),
-
-      // ✅ ใช้ StreamBuilder ดึงข้อมูล order แบบเรียลไทม์
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -122,8 +126,9 @@ class _RDetailPageState extends State<RDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ✅ รูปสินค้า
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         child: imageUrl.isNotEmpty
                             ? Image.network(
                                 imageUrl,
@@ -138,53 +143,129 @@ class _RDetailPageState extends State<RDetailPage> {
                                 child: const Icon(Icons.image, size: 50),
                               ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      Text(
-                        "ผู้ส่ง: $senderName",
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      // ✅ ข้อมูลผู้ส่ง
+                      Card(
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "ข้อมูลผู้ส่ง",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text("ชื่อ: $senderName"),
+                              Text("เบอร์: $senderPhone"),
+                            ],
+                          ),
                         ),
                       ),
-                      Text("เบอร์: $senderPhone"),
-                      const SizedBox(height: 8),
 
-                      Text(
-                        "ผู้รับ: $receiverName",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(height: 12),
+
+                      // ✅ ข้อมูลผู้รับ
+                      Card(
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "ข้อมูลผู้รับ",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueAccent,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text("ชื่อ: $receiverName"),
+                              Text("เบอร์: $receiverPhone"),
+                              const SizedBox(height: 8),
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    "ที่อยู่จัดส่ง",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(address),
+                            ],
+                          ),
                         ),
                       ),
-                      Text("เบอร์: $receiverPhone"),
-                      const SizedBox(height: 8),
 
-                      const Row(
-                        children: [
-                          Icon(Icons.location_on, color: Colors.pink, size: 18),
-                          SizedBox(width: 6),
-                          Text("สถานที่ส่งสินค้า"),
-                        ],
-                      ),
-                      Text(address),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-                      const Text(
-                        "รายการสินค้า",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      // ✅ รายการสินค้า
+                      Card(
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      const Divider(),
-                      ...products.map(
-                        (p) => Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(p["name"] ?? "-"),
-                            Text(p["qty"].toString()),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "รายการสินค้า",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepPurple,
+                                ),
+                              ),
+                              const Divider(),
+                              if (products.isEmpty)
+                                const Text("- ไม่มีข้อมูลสินค้า -")
+                              else
+                                ...products.map(
+                                  (p) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(p["name"] ?? "-"),
+                                        Text(
+                                          "${p["qty"] ?? 1} ชิ้น",
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -193,26 +274,45 @@ class _RDetailPageState extends State<RDetailPage> {
               ),
 
               // ✅ ปุ่มรับงาน
-              Padding(
-                padding: const EdgeInsets.all(16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, -1),
+                    ),
+                  ],
+                ),
                 child: SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: Colors.black87,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
+                    icon: isLoading
+                        ? const SizedBox.shrink()
+                        : const Icon(
+                            Icons.assignment_turned_in_rounded,
+                            color: Colors.white,
+                          ),
                     onPressed: isLoading ? null : () => _acceptJob(data),
-                    child: isLoading
+                    label: isLoading
                         ? const CircularProgressIndicator(
                             color: Colors.white,
                             strokeWidth: 2,
                           )
                         : const Text(
-                            "รับงาน",
+                            "รับงานนี้",
                             style: TextStyle(fontSize: 16, color: Colors.white),
                           ),
                   ),
@@ -222,8 +322,6 @@ class _RDetailPageState extends State<RDetailPage> {
           );
         },
       ),
-
-      // ✅ Bottom Navigation
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

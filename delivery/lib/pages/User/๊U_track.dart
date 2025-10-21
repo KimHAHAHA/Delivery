@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery/pages/User/U_detail_track.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
 
 class UTrackPage extends StatelessWidget {
   const UTrackPage({super.key});
@@ -85,8 +87,20 @@ class UTrackPage extends StatelessWidget {
               final status = order["status"] ?? 1;
               final imageUrl = order["image_url"] ?? "";
 
+              final riderLoc = order["rider_location"];
+              final receiverLat = (order["receiver_lat"] ?? 0).toDouble();
+              final receiverLng = (order["receiver_lng"] ?? 0).toDouble();
+
+              LatLng receiverPos = LatLng(receiverLat, receiverLng);
+              LatLng? riderPos = riderLoc != null
+                  ? LatLng(
+                      (riderLoc["lat"] ?? 0).toDouble(),
+                      (riderLoc["lng"] ?? 0).toDouble(),
+                    )
+                  : null;
+
               return Container(
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 20),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
@@ -99,91 +113,125 @@ class UTrackPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
                   children: [
-                    // ✅ รูปภาพสินค้า
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(8),
-                        image: imageUrl.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(imageUrl),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: imageUrl.isEmpty
-                          ? const Icon(
-                              Icons.inventory_2_outlined,
-                              size: 40,
-                              color: Colors.grey,
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-
-                    // ✅ ข้อมูลออเดอร์
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    // ✅ แผนที่แสดงตำแหน่งไรเดอร์
+                    SizedBox(
+                      height: 200,
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: riderPos ?? receiverPos, // จุดเริ่ม
+                          initialZoom: 14,
+                        ),
                         children: [
-                          Text(
-                            "ชื่อไรเดอร์: $riderName",
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                            userAgentPackageName: 'net.delivery.user',
                           ),
-                          Text(
-                            "เบอร์โทร: $riderPhone",
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          Row(
-                            children: [
-                              const Text(
-                                "สถานะ: ",
-                                style: TextStyle(fontSize: 14),
-                              ),
-                              Text(
-                                _statusText(status),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _statusColor(status),
-                                  fontWeight: FontWeight.bold,
+                          MarkerLayer(
+                            markers: [
+                              // จุดไรเดอร์
+                              if (riderPos != null)
+                                Marker(
+                                  point: riderPos,
+                                  child: const Icon(
+                                    Icons.delivery_dining,
+                                    color: Colors.blue,
+                                    size: 40,
+                                  ),
+                                ),
+                              // จุดผู้รับ
+                              Marker(
+                                point: receiverPos,
+                                child: const Icon(
+                                  Icons.location_on,
+                                  color: Colors.red,
+                                  size: 38,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
 
-                          // ✅ ปุ่มไปหน้ารายละเอียด
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black87,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
+                    // ✅ รูปสินค้า
+                    Row(
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(8),
+                            image: imageUrl.isNotEmpty
+                                ? DecorationImage(
+                                    image: NetworkImage(imageUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: imageUrl.isEmpty
+                              ? const Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 40,
+                                  color: Colors.grey,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "ชื่อไรเดอร์: $riderName",
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              onPressed: () {
-                                Get.to(
-                                  () => UDetailTrackPage(orderId: orderId),
-                                );
-                              },
-                              child: const Text("รายละเอียด"),
-                            ),
+                              Text("เบอร์โทร: $riderPhone"),
+                              Row(
+                                children: [
+                                  const Text("สถานะ: "),
+                                  Text(
+                                    _statusText(status),
+                                    style: TextStyle(
+                                      color: _statusColor(status),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ✅ ปุ่มไปหน้ารายละเอียด
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black87,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        onPressed: () {
+                          Get.to(() => UDetailTrackPage(orderId: orderId));
+                        },
+                        child: const Text("รายละเอียด"),
                       ),
                     ),
                   ],

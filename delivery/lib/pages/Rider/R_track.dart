@@ -21,10 +21,17 @@ class RTrackPage extends StatefulWidget {
 class _RTrackPageState extends State<RTrackPage> {
   File? statusImage;
   bool isLoading = false;
-  MapController mapController = MapController();
+  final MapController mapController = MapController();
   Position? currentPosition;
+  DateTime? _lastUpdateTime; // ✅ ใช้กัน spam เขียน Firestore
 
-  // ✅ ฟังก์ชันเลือกภาพจากกล้อง
+  @override
+  void initState() {
+    super.initState();
+    _trackLocationRealtime();
+  }
+
+  // ✅ เลือกรูปจากกล้อง
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.camera);
@@ -35,7 +42,7 @@ class _RTrackPageState extends State<RTrackPage> {
     }
   }
 
-  // ✅ อัปโหลดภาพไป Supabase
+  // ✅ อัปโหลดรูปไป Supabase
   Future<String?> _uploadImage(File file, String folder) async {
     try {
       final fileName = "${folder}_${DateTime.now().millisecondsSinceEpoch}.jpg";
@@ -57,40 +64,61 @@ class _RTrackPageState extends State<RTrackPage> {
     }
   }
 
-  // ✅ ดึงตำแหน่งปัจจุบันและอัปเดต Firestore แบบเรียลไทม์
+  // ✅ ติดตามตำแหน่งเรียลไทม์ พร้อมกรองและหน่วงเวลา
   Future<void> _trackLocationRealtime() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    if (!serviceEnabled) {
+      Get.snackbar(
+        "ตำแหน่งปิดอยู่",
+        "กรุณาเปิด GPS ก่อนใช้งาน",
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
 
     LocationPermission permission = await Geolocator.requestPermission();
     if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever)
+        permission == LocationPermission.deniedForever) {
+      Get.snackbar(
+        "ไม่มีสิทธิ์เข้าถึงตำแหน่ง",
+        "โปรดอนุญาตตำแหน่งให้แอป",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
       return;
+    }
 
     Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // อัปเดตทุก 5 เมตร
+        accuracy: LocationAccuracy.medium, // ✅ ลด noise
+        distanceFilter: 10, // ✅ อัปเดตเมื่อขยับเกิน 10 เมตร
       ),
     ).listen((Position position) {
-      currentPosition = position;
+      final now = DateTime.now();
+      // ✅ เขียน Firestore แค่ทุก 5 วิ
+      if (_lastUpdateTime == null ||
+          now.difference(_lastUpdateTime!).inSeconds >= 5) {
+        _lastUpdateTime = now;
+        currentPosition = position;
 
-      // ✅ อัปเดต Firestore
-      FirebaseFirestore.instance
-          .collection("orders")
-          .doc(widget.orderId)
-          .update({
-            "rider_location": {
-              "lat": position.latitude,
-              "lng": position.longitude,
-            },
-          });
-
-      // ✅ ขยับกล้องบนแผนที่
-      mapController.move(
-        LatLng(position.latitude, position.longitude),
-        mapController.camera.zoom,
-      );
+        FirebaseFirestore.instance
+            .collection("orders")
+            .doc(widget.orderId)
+            .update({
+              "rider_location": {
+                "lat": position.latitude,
+                "lng": position.longitude,
+              },
+            });
+        // ✅ ขยับกล้องแบบปลอดภัยใน flutter_map 4+
+        mapController.mapEventStream.first.then((_) {
+          mapController.move(
+            LatLng(position.latitude, position.longitude),
+            mapController.camera.zoom,
+          );
+        });
+      }
     });
   }
 
@@ -106,8 +134,8 @@ class _RTrackPageState extends State<RTrackPage> {
 
       int status = data["status"] ?? 2;
       int newStatus = status + 1;
-
       String? imageUrl;
+
       if (statusImage != null) {
         imageUrl = await _uploadImage(statusImage!, "status$newStatus");
       }
@@ -153,12 +181,6 @@ class _RTrackPageState extends State<RTrackPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _trackLocationRealtime();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
@@ -182,16 +204,11 @@ class _RTrackPageState extends State<RTrackPage> {
             .doc(widget.orderId)
             .snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final data = snapshot.data!.data() as Map<String, dynamic>?;
-
-          if (data == null) {
+          if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text("ไม่พบข้อมูลออเดอร์นี้"));
           }
 
+          final data = snapshot.data!.data() as Map<String, dynamic>;
           final receiver = data["receiver_name"] ?? "-";
           final address = data["receiver_address"] ?? "-";
           final receiverLat = (data["receiver_lat"] ?? 0).toDouble();

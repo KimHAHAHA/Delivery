@@ -410,21 +410,23 @@ class _URegisterPageState extends State<URegisterPage> {
         );
         final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
 
-        final supabase = Supabase.instance.client;
         final supaFileName = "user_images/$fileName";
         log("Uploading to Supabase path: $supaFileName");
 
-        final supaResponse = await supabase.storage
-            .from('user')
-            .upload(supaFileName, file);
+        try {
+          await Supabase.instance.client.storage
+              .from('user')
+              .upload(supaFileName, file);
 
-        if (supaResponse == null) {
-          imageUrlSupabase = supabase.storage
+          imageUrlSupabase = Supabase.instance.client.storage
               .from('user')
               .getPublicUrl(supaFileName);
-          log("✅ Supabase uploaded: $imageUrlSupabase");
-        } else {
-          throw 'Supabase upload failed: $supaResponse';
+
+          log("✅ Uploaded: $imageUrlSupabase");
+        } on StorageException catch (e) {
+          throw 'StorageException: ${e.message}';
+        } catch (e) {
+          throw 'Upload error: $e';
         }
       }
 

@@ -18,10 +18,7 @@ class _AddressPageState extends State<AddressPage> {
   // ✅ ตัวแปรหลัก
   List<Map<String, dynamic>> addresses = [];
   final MapController mapController = MapController();
-  LatLng currentPosition = const LatLng(
-    13.736717,
-    100.523186,
-  ); // เริ่มต้นกรุงเทพ
+  LatLng currentPosition = const LatLng(16.245181, 103.250640); // เริ่มต้นมมส
 
   @override
   void initState() {

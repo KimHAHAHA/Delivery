@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:delivery/pages/User/%E0%B9%8A%E0%B9%8AU_track_send.dart';
 import 'package:delivery/pages/User/U_detail_track.dart';
+import 'package:delivery/pages/User/U_track_receive.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -38,6 +40,9 @@ class UTrackPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ กำหนด username ชั่วคราว (กรณีไม่ได้รับค่ามาจากหน้าอื่น)
+    const String username = "guest_user";
+
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
@@ -53,6 +58,8 @@ class UTrackPage extends StatelessWidget {
         ),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
+
+      // ✅ ส่วนของเนื้อหาหลัก
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
@@ -192,6 +199,51 @@ class UTrackPage extends StatelessWidget {
             },
           );
         },
+      ),
+
+      // ✅ ปุ่มด้านล่าง
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        color: const Color(0xFF7DE1A4),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  Get.to(
+                    () => UTrackSend(username: username),
+                  ); // ✅ ไปหน้าติดตามการส่ง
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text("ติดตามการส่ง"),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  Get.to(
+                    () => UTrackReceive(username: username),
+                  ); // ✅ ไปหน้าติดตามการรับ
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text("ติดตามการรับ"),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

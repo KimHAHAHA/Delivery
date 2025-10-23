@@ -21,11 +21,12 @@ class ULoginPage extends StatefulWidget {
 class _ULoginPageState extends State<ULoginPage> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  bool isLoading = false; // ✅ state โหลดดิ้ง
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF7DE1A4), // พื้นหลังเขียวอ่อน
+      backgroundColor: const Color(0xFF7DE1A4),
       body: Center(
         child: SingleChildScrollView(
           child: Column(
@@ -37,7 +38,7 @@ class _ULoginPageState extends State<ULoginPage> {
                 backgroundColor: Colors.transparent,
                 child: ClipOval(
                   child: Image.asset(
-                    "assets/images/Logo.png", // ใส่ path ของโลโก้คุณ
+                    "assets/images/Logo.png",
                     fit: BoxFit.cover,
                     width: 140,
                     height: 140,
@@ -91,19 +92,45 @@ class _ULoginPageState extends State<ULoginPage> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black87,
+                          backgroundColor: isLoading
+                              ? Colors.grey
+                              : Colors.black87,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onPressed: () {
-                          loginUser();
-                        },
-                        child: const Text(
-                          "เข้าสู่ระบบ",
-                          style: TextStyle(fontSize: 16, color: Colors.white),
-                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                await loginUser();
+                              },
+                        child: isLoading
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    "กำลังเข้าสู่ระบบ...",
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
+                              )
+                            : const Text(
+                                "เข้าสู่ระบบ",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -142,8 +169,8 @@ class _ULoginPageState extends State<ULoginPage> {
     );
   }
 
-  // ✅ ฟังก์ชันล็อกอิน
-  void loginUser() async {
+  // ✅ ฟังก์ชันล็อกอิน (มีโหลดดิ้ง)
+  Future<void> loginUser() async {
     final username = usernameController.text.trim();
     final passwordInput = passwordController.text.trim();
 
@@ -152,8 +179,13 @@ class _ULoginPageState extends State<ULoginPage> {
       return;
     }
 
+    setState(() => isLoading = true);
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+
     try {
-      // ✅ แปลงรหัสผ่านที่กรอกเป็น hash
       final hashedInput = sha256.convert(utf8.encode(passwordInput)).toString();
 
       // ✅ ตรวจใน collection "user"
@@ -167,44 +199,35 @@ class _ULoginPageState extends State<ULoginPage> {
         if (hashedInput == storedPassword) {
           final phone = userDoc['phone'] as String;
           final imageUrl = userDoc['imageSupabase'] as String;
-
-          // ✅ ดึง addresses (เป็น list)
           final addresses = userDoc['addresses'] as List<dynamic>? ?? [];
           final address = addresses.isNotEmpty
               ? (addresses.first['detail'] ?? '')
               : 'ไม่มีที่อยู่';
-          final uid = userDoc.id; // ✅ เพิ่มบรรทัดนี้
+          final uid = userDoc.id;
 
-          // ✅ บันทึกข้อมูลลง Provider
           context.read<UserProvider>().setUserData(
-            uid: uid, // 🔹 UID ของผู้ใช้จาก FirebaseAuth หรือ Firestore
-            username: username, // 🔹 ชื่อผู้ใช้
-            phone: phone, // 🔹 เบอร์โทรศัพท์
-            address: address, // 🔹 ที่อยู่เริ่มต้น (จาก Firestore)
-            imageUrl: imageUrl, // 🔹 รูปโปรไฟล์ (URL)
+            uid: uid,
+            username: username,
+            phone: phone,
+            address: address,
+            imageUrl: imageUrl,
           );
 
+          if (Get.isDialogOpen ?? false) Get.back();
           Get.snackbar(
             'สำเร็จ',
             'เข้าสู่ระบบเป็น User',
             backgroundColor: Colors.green,
             colorText: Colors.white,
           );
-
-          Get.to(() => const UHomePage());
+          Get.offAll(() => const UHomePage());
           return;
         } else {
-          Get.snackbar(
-            'ผิดพลาด',
-            'รหัสผ่านไม่ถูกต้องสำหรับ User',
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-          );
-          return;
+          throw 'รหัสผ่านไม่ถูกต้องสำหรับ User';
         }
       }
 
-      // ✅ ถ้าไม่พบ user → ตรวจใน collection "rider"
+      // ✅ ตรวจใน collection "rider"
       final riderDoc = await FirebaseFirestore.instance
           .collection('rider')
           .doc(username)
@@ -213,55 +236,41 @@ class _ULoginPageState extends State<ULoginPage> {
       if (riderDoc.exists) {
         final storedPassword = riderDoc['password'] as String;
         if (hashedInput == storedPassword) {
-          if (hashedInput == storedPassword) {
-            final riderProvider = context.read<RiderProvider>();
+          final riderProvider = context.read<RiderProvider>();
+          riderProvider.setRiderData(
+            uid: riderDoc.id,
+            username: riderDoc['username'],
+            phone: riderDoc['phone'],
+            vehicleController: riderDoc['vehicleController'],
+            riderImageUrl: riderDoc['riderImageUrl'],
+            vehicleImageUrl: riderDoc['vehicleImageUrl'],
+          );
 
-            riderProvider.setRiderData(
-              uid: riderDoc.id, // ✅ เพิ่ม uid จาก Firestore
-              username: riderDoc['username'],
-              phone: riderDoc['phone'],
-              vehicleController: riderDoc['vehicleController'],
-              riderImageUrl: riderDoc['riderImageUrl'],
-              vehicleImageUrl: riderDoc['vehicleImageUrl'],
-            );
-
-            Get.offAll(() => const RHomePage()); // ✅ ไปหน้าไรเดอร์หลัก
-          }
-
+          if (Get.isDialogOpen ?? false) Get.back();
           Get.snackbar(
             'สำเร็จ',
             'เข้าสู่ระบบเป็น Rider',
             backgroundColor: Colors.green,
             colorText: Colors.white,
           );
-
-          Get.to(() => const RHomePage());
+          Get.offAll(() => const RHomePage());
           return;
         } else {
-          Get.snackbar(
-            'ผิดพลาด',
-            'รหัสผ่านไม่ถูกต้องสำหรับ Rider',
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-          );
-          return;
+          throw 'รหัสผ่านไม่ถูกต้องสำหรับ Rider';
         }
       }
 
-      // ✅ ถ้าไม่พบทั้ง user และ rider
-      Get.snackbar(
-        'ผิดพลาด',
-        'ไม่พบชื่อผู้ใช้ในระบบ',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      throw 'ไม่พบชื่อผู้ใช้ในระบบ';
     } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
         'ผิดพลาด',
-        'เกิดข้อผิดพลาด: $e',
+        '$e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 }

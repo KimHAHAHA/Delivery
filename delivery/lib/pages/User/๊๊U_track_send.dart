@@ -4,8 +4,38 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 class UTrackSend extends StatelessWidget {
-  final String username; // ✅ รับชื่อผู้ใช้
+  final String username; // ✅ ชื่อผู้ใช้ (เรา)
   const UTrackSend({super.key, required this.username});
+
+  String _statusText(int status) {
+    switch (status) {
+      case 1:
+        return "รอไรเดอร์รับสินค้า";
+      case 2:
+        return "กำลังเดินทางมารับสินค้า";
+      case 3:
+        return "ไรเดอร์รับสินค้าแล้ว กำลังจัดส่ง";
+      case 4:
+        return "จัดส่งสำเร็จ";
+      default:
+        return "ไม่ทราบสถานะ";
+    }
+  }
+
+  Color _statusColor(int status) {
+    switch (status) {
+      case 1:
+        return Colors.orange;
+      case 2:
+        return Colors.blue;
+      case 3:
+        return Colors.purple;
+      case 4:
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,11 +48,12 @@ class UTrackSend extends StatelessWidget {
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.white,
+            size: 22,
           ),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "ติดตามการส่ง",
+          "ติดตามไรเดอร์ทั้งหมดของฉัน",
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -32,13 +63,12 @@ class UTrackSend extends StatelessWidget {
         centerTitle: true,
       ),
 
-      // ✅ ดึงออเดอร์ทั้งหมดของผู้ใช้นี้ที่ยังไม่จัดส่งเสร็จ
+      // ✅ ดึงออเดอร์เฉพาะของ user ที่เป็นผู้ส่ง
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
-            .where("username", isEqualTo: username)
-            .where("status", isGreaterThanOrEqualTo: 2)
-            .where("status", isLessThanOrEqualTo: 3)
+            .where("sender_name", isEqualTo: username) // 🔹 เฉพาะของเรา
+            .where("status", whereIn: [2, 3]) // 🔹 กำลังมารับหรือจัดส่ง
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -46,32 +76,33 @@ class UTrackSend extends StatelessWidget {
           }
 
           final orders = snapshot.data!.docs;
+
           if (orders.isEmpty) {
             return const Center(
-              child: Text("ไม่มีไรเดอร์ที่กำลังจัดส่งในขณะนี้"),
+              child: Text("ยังไม่มีไรเดอร์ที่กำลังจัดส่งสินค้าของคุณ"),
             );
           }
 
+          // ✅ เตรียม Marker ทั้งหมด
           List<Marker> markers = [];
           LatLng? firstPos;
 
-          // ✅ วนทุกออเดอร์ที่ผู้ใช้ได้รับ
           for (var doc in orders) {
             final data = doc.data() as Map<String, dynamic>;
 
-            // --- Marker ตำแหน่งไรเดอร์ ---
+            // ✅ Marker ของไรเดอร์
             final riderLoc = data["rider_location"];
             if (riderLoc != null &&
                 riderLoc["lat"] != null &&
                 riderLoc["lng"] != null) {
-              LatLng pos = LatLng(
+              LatLng riderPos = LatLng(
                 (riderLoc["lat"] ?? 0).toDouble(),
                 (riderLoc["lng"] ?? 0).toDouble(),
               );
-              firstPos ??= pos;
+              firstPos ??= riderPos;
               markers.add(
                 Marker(
-                  point: pos,
+                  point: riderPos,
                   child: const Icon(
                     Icons.delivery_dining,
                     size: 38,
@@ -81,15 +112,15 @@ class UTrackSend extends StatelessWidget {
               );
             }
 
-            // --- Marker ปลายทางผู้ใช้ (บ้าน) ---
+            // ✅ Marker ของผู้รับ
             if (data["receiver_lat"] != null && data["receiver_lng"] != null) {
-              LatLng home = LatLng(
+              LatLng recvPos = LatLng(
                 (data["receiver_lat"] ?? 0).toDouble(),
                 (data["receiver_lng"] ?? 0).toDouble(),
               );
               markers.add(
                 Marker(
-                  point: home,
+                  point: recvPos,
                   child: const Icon(
                     Icons.location_on,
                     size: 42,
@@ -100,9 +131,10 @@ class UTrackSend extends StatelessWidget {
             }
           }
 
+          // ✅ UI รวม
           return Column(
             children: [
-              // ✅ แผนที่รวมทุกไรเดอร์
+              // 🔹 แผนที่
               Expanded(
                 child: FlutterMap(
                   options: MapOptions(
@@ -120,7 +152,7 @@ class UTrackSend extends StatelessWidget {
                 ),
               ),
 
-              // ✅ แสดงข้อมูลไรเดอร์ทั้งหมด
+              // 🔹 รายละเอียดไรเดอร์
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -133,26 +165,38 @@ class UTrackSend extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: orders.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return Column(
-                      children: [
-                        Row(
+                  children: [
+                    const Text(
+                      "รายละเอียดไรเดอร์ที่กำลังจัดส่ง",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const Divider(thickness: 1),
+                    ...orders.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data["status"] ?? 0;
+                      final imageUrl = data["rider_image_url"];
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             CircleAvatar(
                               radius: 24,
                               backgroundImage:
-                                  data["rider_image_url"] != null &&
-                                      data["rider_image_url"]
-                                          .toString()
-                                          .isNotEmpty
-                                  ? NetworkImage(data["rider_image_url"])
+                                  (imageUrl != null &&
+                                      imageUrl.toString().isNotEmpty)
+                                  ? NetworkImage(imageUrl)
                                   : const AssetImage(
                                           "assets/images/profile.png",
                                         )
                                         as ImageProvider,
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,24 +211,31 @@ class UTrackSend extends StatelessWidget {
                                     "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
                                   ),
                                   Text(
-                                    "สถานะ: ${data["status"] == 3 ? "กำลังจัดส่ง" : "มารับสินค้า"}",
+                                    "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
                                   ),
                                   Text(
-                                    "สินค้า: ${data["products"]?[0]?["name"] ?? "-"}",
+                                    "สถานะ: ${_statusText(status)}",
+                                    style: TextStyle(
+                                      color: _statusColor(status),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
+                                  if (data["products"] != null)
+                                    Text(
+                                      "สินค้า: ${(data["products"] as List).map((p) => p["name"]).join(', ')}",
+                                    ),
                                 ],
                               ),
                             ),
                             const Icon(
-                              Icons.directions_bike,
+                              Icons.delivery_dining,
                               color: Colors.black87,
                             ),
                           ],
                         ),
-                        const Divider(thickness: 1),
-                      ],
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ],
                 ),
               ),
             ],

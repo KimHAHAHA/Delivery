@@ -62,7 +62,7 @@ class _RHomePageState extends State<RHomePage> {
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
     if (index == 0) {
-      Get.off(() => const RHomePage());
+      Get.to(() => const RHomePage());
     } else {
       Get.to(() => const RProfilePage());
     }

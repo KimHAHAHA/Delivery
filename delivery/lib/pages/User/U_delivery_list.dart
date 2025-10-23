@@ -160,7 +160,9 @@ class _UDeliveryListState extends State<UDeliveryList> {
   }
 
   // ✅ บันทึกข้อมูลลง Firestore + อัปโหลดภาพไป Supabase
+  // ✅ บันทึกข้อมูลลง Firestore + อัปโหลดภาพไป Supabase
   Future<void> _saveOrder() async {
+    // ✅ ตรวจสอบข้อมูลผู้ส่ง
     if (senderData == null || selectedSenderAddress == null) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -171,6 +173,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
+    // ✅ ตรวจสอบข้อมูลผู้รับ
     if (receiverData == null || selectedReceiverAddress == null) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -181,6 +184,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
+    // ✅ ตรวจสอบสินค้า
     if (products.isEmpty) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -191,12 +195,25 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
+    // ✅ ตรวจสอบว่ามีภาพสินค้าหรือยัง
+    if (productImage == null) {
+      Get.snackbar(
+        "แจ้งเตือน",
+        "กรุณาถ่ายหรือเลือกรูปสินค้าก่อนกดยืนยัน",
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    // ✅ แสดงโหลดดิ้งระหว่างบันทึก
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
       barrierDismissible: false,
     );
 
     try {
+      // ✅ อัปโหลดรูปสินค้าขึ้น Supabase
       String? imageUrl;
       if (productImage != null) {
         final fileName = "order_${DateTime.now().millisecondsSinceEpoch}.jpg";
@@ -208,21 +225,23 @@ class _UDeliveryListState extends State<UDeliveryList> {
             .getPublicUrl(fileName);
       }
 
+      // ✅ บันทึกข้อมูลคำสั่งลง Firestore
       await FirebaseFirestore.instance.collection("orders").add({
-        // ✅ ผู้ส่ง
+        // ผู้ส่ง
         "sender_name": senderData!["name"],
         "sender_phone": senderData!["phone"],
         "sender_address": selectedSenderAddress!['detail'],
         "sender_lat": selectedSenderAddress!['lat'],
         "sender_lng": selectedSenderAddress!['lng'],
 
-        // ✅ ผู้รับ
+        // ผู้รับ
         "receiver_name": receiverData!["name"],
         "receiver_phone": receiverData!["phone"],
         "receiver_address": selectedReceiverAddress!['detail'],
         "receiver_lat": selectedReceiverAddress!['lat'],
         "receiver_lng": selectedReceiverAddress!['lng'],
 
+        // สินค้าและรูป
         "products": products,
         "image_url": imageUrl ?? "",
         "status": 1,
@@ -234,7 +253,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
 
       Get.snackbar(
         "สำเร็จ",
-        "บันทึกคำสั่งส่งสินค้าเรียบร้อยแล้ว",
+        "บันทึกคำสั่งส่งสินค้าเรียบร้อยแล้ว 🎉",
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -528,7 +547,24 @@ class _UDeliveryListState extends State<UDeliveryList> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onPressed: _saveOrder,
+                        onPressed: () {
+                          // ✅ ตรวจสอบก่อนกดส่ง
+                          if (senderData == null ||
+                              selectedSenderAddress == null ||
+                              receiverData == null ||
+                              selectedReceiverAddress == null ||
+                              products.isEmpty ||
+                              productImage == null) {
+                            Get.snackbar(
+                              "ข้อมูลไม่ครบ",
+                              "กรุณากรอกและแนบข้อมูลให้ครบก่อนกดยืนยัน",
+                              backgroundColor: Colors.orange,
+                              colorText: Colors.white,
+                            );
+                            return;
+                          }
+                          _saveOrder();
+                        },
                         child: const Text(
                           "ยืนยันการส่ง",
                           style: TextStyle(fontSize: 16, color: Colors.white),

@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 class UTrackReceive extends StatelessWidget {
-  final String username; // ✅ รับชื่อผู้ใช้ (เจ้าของสินค้าที่รอให้มารับ)
+  final String username; // ✅ ชื่อผู้ใช้ (ผู้รับ)
   const UTrackReceive({super.key, required this.username});
 
   @override
@@ -22,7 +22,7 @@ class UTrackReceive extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "ติดตามการรับสินค้า",
+          "สินค้าที่จัดส่งสำเร็จแล้ว",
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -32,12 +32,12 @@ class UTrackReceive extends StatelessWidget {
         centerTitle: true,
       ),
 
-      // ✅ ดึงออเดอร์ทั้งหมดของผู้ใช้นี้ที่อยู่ในสถานะ "รอรับสินค้า"
+      // ✅ ดึงออเดอร์ของผู้ใช้นี้ที่ "จัดส่งเสร็จแล้ว" (status = 4)
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
-            .where("sender_username", isEqualTo: username)
-            .where("status", isEqualTo: 2) // 2 = กำลังมารับสินค้า
+            .where("receiver_name", isEqualTo: username)
+            .where("status", isEqualTo: 4)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -47,30 +47,47 @@ class UTrackReceive extends StatelessWidget {
           final orders = snapshot.data!.docs;
           if (orders.isEmpty) {
             return const Center(
-              child: Text("ยังไม่มีไรเดอร์ที่กำลังมารับสินค้า"),
+              child: Text(
+                "ยังไม่มีสินค้าที่จัดส่งสำเร็จแล้ว",
+                style: TextStyle(fontSize: 16, color: Colors.black54),
+              ),
             );
           }
 
           List<Marker> markers = [];
           LatLng? firstPos;
 
-          // ✅ สร้าง Marker ของทุกไรเดอร์
+          // ✅ สร้าง Marker ของทุกไรเดอร์ที่จัดส่งเสร็จแล้ว
           for (var doc in orders) {
             final data = doc.data() as Map<String, dynamic>;
 
-            // --- Marker ของไรเดอร์ ---
+            // --- Marker ของบ้านผู้รับ (ปลายทาง) ---
+            if (data["receiver_lat"] != null && data["receiver_lng"] != null) {
+              LatLng receiverHome = LatLng(
+                (data["receiver_lat"] ?? 0).toDouble(),
+                (data["receiver_lng"] ?? 0).toDouble(),
+              );
+              firstPos ??= receiverHome;
+              markers.add(
+                Marker(
+                  point: receiverHome,
+                  child: const Icon(Icons.home, size: 40, color: Colors.green),
+                ),
+              );
+            }
+
+            // --- Marker ของตำแหน่งสุดท้ายของไรเดอร์ (ตอนส่งสำเร็จ) ---
             final riderLoc = data["rider_location"];
             if (riderLoc != null &&
                 riderLoc["lat"] != null &&
                 riderLoc["lng"] != null) {
-              LatLng pos = LatLng(
+              LatLng riderPos = LatLng(
                 (riderLoc["lat"] ?? 0).toDouble(),
                 (riderLoc["lng"] ?? 0).toDouble(),
               );
-              firstPos ??= pos;
               markers.add(
                 Marker(
-                  point: pos,
+                  point: riderPos,
                   child: const Icon(
                     Icons.delivery_dining,
                     size: 38,
@@ -79,107 +96,109 @@ class UTrackReceive extends StatelessWidget {
                 ),
               );
             }
-
-            // --- Marker ของผู้ใช้ (บ้านต้นทาง) ---
-            if (data["sender_lat"] != null && data["sender_lng"] != null) {
-              LatLng senderHome = LatLng(
-                (data["sender_lat"] ?? 0).toDouble(),
-                (data["sender_lng"] ?? 0).toDouble(),
-              );
-              markers.add(
-                Marker(
-                  point: senderHome,
-                  child: const Icon(Icons.home, size: 40, color: Colors.orange),
-                ),
-              );
-            }
           }
 
           return Column(
             children: [
-              // ✅ แผนที่แสดงไรเดอร์ที่กำลังมารับสินค้า
+              // ✅ รายการเลื่อนดูได้
               Expanded(
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter:
-                        firstPos ?? const LatLng(13.736717, 100.523186),
-                    initialZoom: 13,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                child: SingleChildScrollView(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
                     ),
-                    MarkerLayer(markers: markers),
-                  ],
-                ),
-              ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: orders.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final List<dynamic> products = data["products"] ?? [];
 
-              // ✅ แสดงข้อมูลไรเดอร์ทั้งหมดที่มารับสินค้า
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: orders.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    return Column(
-                      children: [
-                        Row(
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundImage:
-                                  data["rider_image_url"] != null &&
-                                      data["rider_image_url"]
-                                          .toString()
-                                          .isNotEmpty
-                                  ? NetworkImage(data["rider_image_url"])
-                                  : const AssetImage(
-                                          "assets/images/profile.png",
-                                        )
-                                        as ImageProvider,
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 24,
+                                  backgroundImage:
+                                      data["rider_image_url"] != null &&
+                                          data["rider_image_url"]
+                                              .toString()
+                                              .isNotEmpty
+                                      ? NetworkImage(data["rider_image_url"])
+                                      : const AssetImage(
+                                              "assets/images/profile.png",
+                                            )
+                                            as ImageProvider,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
+                                      ),
+                                      Text(
+                                        "สถานะ: จัดส่งสำเร็จแล้ว",
+                                        style: const TextStyle(
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
-                                  ),
-                                  Text(
-                                    "หมายเลขพัสดุ: ${data["order_code"] ?? "-"}",
-                                  ),
-                                  Text(
-                                    "สินค้า: ${data["products"]?[0]?["name"] ?? "-"}",
-                                  ),
-                                ],
+
+                            const SizedBox(height: 8),
+                            const Text(
+                              "รายการสินค้า:",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
                               ),
                             ),
-                            const Icon(
-                              Icons.directions_bike,
-                              color: Colors.black87,
-                            ),
+                            ...products.map((p) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(p["name"] ?? "-"),
+                                    Text("x${p["qty"] ?? "-"}"),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+
+                            const Divider(thickness: 1),
                           ],
-                        ),
-                        const Divider(thickness: 1),
-                      ],
-                    );
-                  }).toList(),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ),
               ),
             ],

@@ -4,8 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 class UDetailTrackPage extends StatelessWidget {
-  final String orderId; // ✅ รับ orderId
-
+  final String orderId;
   const UDetailTrackPage({super.key, required this.orderId});
 
   String _statusText(int status) {
@@ -82,6 +81,15 @@ class UDetailTrackPage extends StatelessWidget {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final status = data["status"] ?? 1;
 
+          // ✅ ดึงรูปภาพตามสถานะ
+          final imageUrl = switch (status) {
+            1 => data["image_url"],
+            2 => data["image_url"],
+            3 => data["image_url_status3"],
+            4 => data["image_url_status4"],
+            _ => null,
+          };
+
           // ✅ กำหนดเป้าหมายแผนที่ตามสถานะ
           final double targetLat = status == 2
               ? (data["sender_lat"] ?? 0).toDouble()
@@ -89,12 +97,14 @@ class UDetailTrackPage extends StatelessWidget {
           final double targetLng = status == 2
               ? (data["sender_lng"] ?? 0).toDouble()
               : (data["receiver_lng"] ?? 0).toDouble();
-
           LatLng targetPos = LatLng(targetLat, targetLng);
+
+          // ✅ ดึงสินค้าทั้งหมดจาก products array
+          final List<dynamic> products = data["products"] ?? [];
 
           return Column(
             children: [
-              // ✅ แถบสถานะด้านบน
+              // ✅ แถบสถานะ
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.symmetric(
@@ -133,13 +143,43 @@ class UDetailTrackPage extends StatelessWidget {
                 ),
               ),
 
-              // ✅ แผนที่ Real-time แสดงไรเดอร์และเป้าหมาย (sender/receiver)
+              // ✅ รูปภาพประกอบสถานะ
+              if (imageUrl != null && imageUrl.toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      imageUrl,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(child: Text("ไม่มีภาพประกอบในสถานะนี้")),
+                ),
+
+              // ✅ แผนที่ Real-time
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection("orders")
-                      .where("status", isGreaterThanOrEqualTo: 2)
-                      .where("status", isLessThanOrEqualTo: 3)
+                      .where("status", whereIn: [2, 3])
                       .snapshots(),
                   builder: (context, riderSnap) {
                     if (!riderSnap.hasData) {
@@ -172,7 +212,7 @@ class UDetailTrackPage extends StatelessWidget {
                       }
                     }
 
-                    // ✅ Marker ของจุดเป้าหมาย (เปลี่ยนตามสถานะ)
+                    // ✅ Marker ของจุดเป้าหมาย
                     markers.add(
                       Marker(
                         point: targetPos,
@@ -201,7 +241,7 @@ class UDetailTrackPage extends StatelessWidget {
                 ),
               ),
 
-              // ✅ ข้อมูลไรเดอร์
+              // ✅ ข้อมูลไรเดอร์ + สินค้าทั้งหมด
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -212,49 +252,103 @@ class UDetailTrackPage extends StatelessWidget {
                     topRight: Radius.circular(20),
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundImage:
-                          data["rider_image_url"] != null &&
-                              data["rider_image_url"].toString().isNotEmpty
-                          ? NetworkImage(data["rider_image_url"])
-                          : const AssetImage("assets/images/profile.png")
-                                as ImageProvider,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // --- ข้อมูลไรเดอร์ ---
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundImage:
+                                data["rider_image_url"] != null &&
+                                    data["rider_image_url"]
+                                        .toString()
+                                        .isNotEmpty
+                                ? NetworkImage(data["rider_image_url"])
+                                : const AssetImage("assets/images/profile.png")
+                                      as ImageProvider,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
-                          const SizedBox(height: 4),
-                          Text(
-                            "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? data["vehicle_number"] ?? "-"}",
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "สินค้า: ${data["products"] != null && data["products"].isNotEmpty ? data["products"][0]["name"] : "-"}",
+                          const Icon(
+                            Icons.directions_bike,
+                            size: 32,
+                            color: Colors.black87,
                           ),
                         ],
                       ),
-                    ),
-                    const Icon(
-                      Icons.directions_bike,
-                      size: 32,
-                      color: Colors.black87,
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      const Divider(thickness: 1),
+
+                      // --- รายการสินค้า ---
+                      const Text(
+                        "รายการสินค้าในออเดอร์นี้:",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      if (products.isNotEmpty)
+                        ...products.map((item) {
+                          final name = item["name"] ?? "-";
+                          final qty = item["qty"] ?? "1";
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 20,
+                                  color: Colors.black54,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    "$name",
+                                    style: const TextStyle(fontSize: 15),
+                                  ),
+                                ),
+                                Text(
+                                  "x$qty",
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList()
+                      else
+                        const Text("ไม่มีข้อมูลสินค้า"),
+                    ],
+                  ),
                 ),
               ),
             ],

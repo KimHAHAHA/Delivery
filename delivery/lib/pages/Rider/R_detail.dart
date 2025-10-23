@@ -4,12 +4,14 @@ import 'package:delivery/pages/Rider/R_proflie.dart';
 import 'package:delivery/pages/Rider/R_track.dart';
 import 'package:delivery/providers/rider_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 class RDetailPage extends StatefulWidget {
   final String orderId;
-
   const RDetailPage({super.key, required this.orderId});
 
   @override
@@ -18,7 +20,27 @@ class RDetailPage extends StatefulWidget {
 
 class _RDetailPageState extends State<RDetailPage> {
   int _selectedIndex = 0;
-  bool isLoading = false;
+  bool isAccepting = false;
+  Position? currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateCurrentPosition();
+  }
+
+  Future<void> _updateCurrentPosition() async {
+    try {
+      currentPosition = await Geolocator.getCurrentPosition();
+    } catch (e) {
+      Get.snackbar(
+        "ผิดพลาด",
+        "ไม่สามารถดึงตำแหน่งได้: $e",
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -30,57 +52,99 @@ class _RDetailPageState extends State<RDetailPage> {
   }
 
   /// ✅ ฟังก์ชันรับงาน
-  Future<void> _acceptJob(Map<String, dynamic> data) async {
-    if (isLoading) return;
-    setState(() => isLoading = true);
-
-    final rider = context.read<RiderProvider>();
-    final docRef = FirebaseFirestore.instance
-        .collection('orders')
-        .doc(widget.orderId);
+  Future<void> _acceptJob(
+    String orderId,
+    Map<String, dynamic> orderData,
+    RiderProvider rider,
+  ) async {
+    if (isAccepting) return;
+    isAccepting = true;
 
     try {
-      // ตรวจสอบว่ามีคนรับไปแล้วหรือยัง
-      final snapshot = await docRef.get();
-      final current = snapshot.data() as Map<String, dynamic>?;
-      if (current == null || current["status"] != 1) {
+      currentPosition ??= await Geolocator.getCurrentPosition();
+
+      final senderLat = (orderData["sender_lat"] ?? 0).toDouble();
+      final senderLng = (orderData["sender_lng"] ?? 0).toDouble();
+
+      if (currentPosition == null) {
         Get.snackbar(
-          "⚠️ งานนี้ไม่ว่างแล้ว",
-          "มีไรเดอร์คนอื่นรับไปแล้ว",
-          backgroundColor: Colors.orange,
+          "ไม่สามารถรับงานได้",
+          "ไม่พบตำแหน่งปัจจุบันของคุณ",
+          backgroundColor: Colors.red,
           colorText: Colors.white,
         );
-        setState(() => isLoading = false);
+        isAccepting = false;
         return;
       }
 
-      await docRef.update({
-        "status": 2,
-        "rider_id": rider.uid,
-        "rider_name": rider.username,
-        "rider_phone": rider.phone,
-        "vehicleController": rider.vehicleController ?? "-",
-        "rider_image_url": rider.riderImageUrl ?? "",
-        "acceptedAt": FieldValue.serverTimestamp(),
+      final distance = const Distance().as(
+        LengthUnit.Meter,
+        LatLng(currentPosition!.latitude, currentPosition!.longitude),
+        LatLng(senderLat, senderLng),
+      );
+
+      if (distance > 20) {
+        Get.snackbar(
+          "อยู่ไกลจากจุดรับของเกินไป",
+          "ต้องอยู่ในระยะไม่เกิน 20 เมตรถึงจะรับงานได้ (ตอนนี้ ${distance.toStringAsFixed(0)} เมตร)",
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+        isAccepting = false;
+        return;
+      }
+
+      final ref = FirebaseFirestore.instance.collection('orders').doc(orderId);
+      Get.dialog(
+        const Center(child: CircularProgressIndicator()),
+        barrierDismissible: false,
+      );
+
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw "ไม่พบออเดอร์นี้";
+        final data = snap.data() as Map<String, dynamic>;
+
+        if (data['status'] != 1 || data['rider_id'] != null) {
+          throw "งานนี้มีไรเดอร์รับไปแล้ว";
+        }
+
+        tx.update(ref, {
+          "status": 2,
+          "rider_id": rider.uid,
+          "rider_name": rider.username,
+          "rider_phone": rider.phone,
+          "vehicleController": rider.vehicleController ?? "-",
+          "rider_image_url": rider.riderImageUrl ?? "",
+          "rider_location": {
+            "lat": currentPosition?.latitude ?? 0,
+            "lng": currentPosition?.longitude ?? 0,
+          },
+          "acceptedAt": FieldValue.serverTimestamp(),
+        });
       });
 
+      if (Get.isDialogOpen ?? false) Get.back();
+
       Get.snackbar(
-        "✅ รับงานสำเร็จ",
-        "คุณได้รับงานนี้เรียบร้อยแล้ว",
+        "✅ สำเร็จ",
+        "รับงานเรียบร้อยแล้ว",
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
 
-      Get.off(() => RTrackPage(orderId: widget.orderId));
+      await Future.delayed(const Duration(milliseconds: 500));
+      Get.off(() => RTrackPage(orderId: orderId));
     } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
-        "❌ ผิดพลาด",
-        "ไม่สามารถรับงานได้: $e",
+        "ผิดพลาด",
+        "$e",
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
     } finally {
-      setState(() => isLoading = false);
+      isAccepting = false;
     }
   }
 
@@ -109,8 +173,6 @@ class _RDetailPageState extends State<RDetailPage> {
           ),
         ),
       ),
-
-      // ✅ ข้อมูลแบบเรียลไทม์
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
@@ -125,6 +187,15 @@ class _RDetailPageState extends State<RDetailPage> {
           if (data == null) {
             return const Center(child: Text("ไม่พบข้อมูลคำสั่งซื้อ"));
           }
+
+          final senderLat = (data["sender_lat"] ?? 0).toDouble();
+          final senderLng = (data["sender_lng"] ?? 0).toDouble();
+          final receiverLat = (data["receiver_lat"] ?? 0).toDouble();
+          final receiverLng = (data["receiver_lng"] ?? 0).toDouble();
+          final addressSender = data["sender_address"] ?? "-";
+
+          final senderPos = LatLng(senderLat, senderLng);
+          final receiverPos = LatLng(receiverLat, receiverLng);
 
           final products = data["products"] ?? [];
           final senderName = data["sender_name"] ?? "-";
@@ -142,7 +213,7 @@ class _RDetailPageState extends State<RDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ✅ รูปสินค้า
+                      // รูปสินค้า
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: imageUrl.isNotEmpty
@@ -161,60 +232,38 @@ class _RDetailPageState extends State<RDetailPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      // ✅ ข้อมูลผู้ส่ง
+                      _sectionHeader("📦 ข้อมูลผู้ส่ง"),
+                      _infoCard([
+                        Text("ชื่อผู้ส่ง: $senderName"),
+                        Text("เบอร์โทร: $senderPhone"),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "ที่อยู่จัดส่ง:",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(addressSender),
+                      ]),
+
+                      const SizedBox(height: 16),
+                      _sectionHeader("🏠 ข้อมูลผู้รับ"),
+                      _infoCard([
+                        Text("ชื่อผู้รับ: $receiverName"),
+                        Text("เบอร์โทร: $receiverPhone"),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "ที่อยู่จัดส่ง:",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(address),
+                      ]),
+
+                      const SizedBox(height: 16),
+                      _sectionHeader("🛍️ รายการสินค้า"),
                       _infoCard(
-                        title: "ข้อมูลผู้ส่ง",
-                        titleColor: Colors.green,
-                        children: [
-                          Text("ชื่อ: $senderName"),
-                          Text("เบอร์: $senderPhone"),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // ✅ ข้อมูลผู้รับ
-                      _infoCard(
-                        title: "ข้อมูลผู้รับ",
-                        titleColor: Colors.blueAccent,
-                        children: [
-                          Text("ชื่อ: $receiverName"),
-                          Text("เบอร์: $receiverPhone"),
-                          const SizedBox(height: 8),
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 18,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                "ที่อยู่จัดส่ง",
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          Text(address),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // ✅ รายการสินค้า
-                      _infoCard(
-                        title: "รายการสินค้า",
-                        titleColor: Colors.deepPurple,
-                        children: [
-                          if (products.isEmpty)
-                            const Text("- ไม่มีข้อมูลสินค้า -")
-                          else
-                            ...products.map(
-                              (p) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 3,
-                                ),
-                                child: Row(
+                        products.isEmpty
+                            ? [const Text("- ไม่มีข้อมูลสินค้า -")]
+                            : products.map<Widget>((p) {
+                                return Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
@@ -226,17 +275,60 @@ class _RDetailPageState extends State<RDetailPage> {
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
+                                );
+                              }).toList(),
+                      ),
+
+                      const SizedBox(height: 16),
+                      _sectionHeader("🗺️ แผนที่จัดส่ง"),
+                      Container(
+                        height: 280,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: FlutterMap(
+                          options: MapOptions(
+                            initialCenter: LatLng(
+                              (senderLat + receiverLat) / 2,
+                              (senderLng + receiverLng) / 2,
                             ),
-                        ],
+                            initialZoom: 13,
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: senderPos,
+                                  child: const Icon(
+                                    Icons.store_mall_directory,
+                                    color: Colors.orange,
+                                    size: 38,
+                                  ),
+                                ),
+                                Marker(
+                                  point: receiverPos,
+                                  child: const Icon(
+                                    Icons.home,
+                                    color: Colors.red,
+                                    size: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // ✅ ปุ่มรับงาน
+              // ปุ่มรับงาน
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -262,14 +354,19 @@ class _RDetailPageState extends State<RDetailPage> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    icon: isLoading
+                    icon: isAccepting
                         ? const SizedBox.shrink()
                         : const Icon(
                             Icons.assignment_turned_in_rounded,
                             color: Colors.white,
                           ),
-                    onPressed: isLoading ? null : () => _acceptJob(data),
-                    label: isLoading
+                    onPressed: isAccepting
+                        ? null
+                        : () {
+                            final rider = context.read<RiderProvider>();
+                            _acceptJob(widget.orderId, data, rider);
+                          },
+                    label: isAccepting
                         ? const CircularProgressIndicator(
                             color: Colors.white,
                             strokeWidth: 2,
@@ -286,7 +383,7 @@ class _RDetailPageState extends State<RDetailPage> {
         },
       ),
 
-      // ✅ Bottom Navigation
+      // Bottom Navigation
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -299,33 +396,29 @@ class _RDetailPageState extends State<RDetailPage> {
     );
   }
 
-  /// ✅ widget ย่อยสำหรับแสดง Card สวย ๆ
-  Widget _infoCard({
-    required String title,
-    required Color titleColor,
-    required List<Widget> children,
-  }) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: titleColor,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...children,
-          ],
-        ),
+  /// ===== Widget ย่อย =====
+
+  Widget _sectionHeader(String title) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(
+      title,
+      style: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        color: Colors.black,
       ),
-    );
-  }
+    ),
+  );
+
+  Widget _infoCard(List<Widget> children) => Card(
+    elevation: 2,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    ),
+  );
 }

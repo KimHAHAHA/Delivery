@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -25,19 +24,15 @@ class _URegisterPageState extends State<URegisterPage> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
-  final TextEditingController addressController =
-      TextEditingController(); // พิกัด
-  final TextEditingController detailController =
-      TextEditingController(); // รายละเอียด
+  final TextEditingController addressController = TextEditingController();
+  final TextEditingController detailController = TextEditingController();
 
   final MapController mapController = MapController();
   final ImagePicker picker = ImagePicker();
   XFile? image;
+  bool isLoading = false; // ✅ ตัวแปรโหลดดิ้ง
   LatLng currentPosition = const LatLng(16.246373, 103.251827);
-
   final FirebaseFirestore db = FirebaseFirestore.instance;
-
-  // ✅ เก็บหลาย address
   List<Map<String, dynamic>> addresses = [];
 
   @override
@@ -52,7 +47,6 @@ class _URegisterPageState extends State<URegisterPage> {
     super.dispose();
   }
 
-  // ✅ เพิ่ม address เข้าลิสต์
   void addAddress() {
     if (addressController.text.isNotEmpty && detailController.text.isNotEmpty) {
       setState(() {
@@ -105,47 +99,25 @@ class _URegisterPageState extends State<URegisterPage> {
             ),
             child: Column(
               children: [
-                TextField(
-                  controller: usernameController,
-                  decoration: const InputDecoration(
-                    labelText: "ชื่อผู้ใช้งาน",
-                    hintText: "ชื่อผู้ใช้งาน",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                // 🔹 ช่องกรอกข้อมูล
+                _buildTextField(usernameController, "ชื่อผู้ใช้งาน"),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
+                _buildTextField(
+                  phoneController,
+                  "หมายเลขโทรศัพท์",
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: "หมายเลขโทรศัพท์",
-                    hintText: "หมายเลขโทรศัพท์",
-                    border: OutlineInputBorder(),
-                  ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "รหัสผ่าน",
-                    hintText: "รหัสผ่าน",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                _buildTextField(passwordController, "รหัสผ่าน", obscure: true),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "ยืนยันรหัสผ่าน",
-                    hintText: "ยืนยันรหัสผ่าน",
-                    border: OutlineInputBorder(),
-                  ),
+                _buildTextField(
+                  confirmPasswordController,
+                  "ยืนยันรหัสผ่าน",
+                  obscure: true,
                 ),
                 const SizedBox(height: 16),
 
-                // ✅ พิกัด GPS
+                // 🔹 ที่อยู่ (GPS)
                 TextField(
                   controller: addressController,
                   readOnly: true,
@@ -177,7 +149,6 @@ class _URegisterPageState extends State<URegisterPage> {
                             colorText: Colors.white,
                           );
                         } catch (e) {
-                          if (!mounted) return;
                           Get.snackbar(
                             'ผิดพลาด',
                             'ไม่สามารถดึงตำแหน่งได้: $e',
@@ -191,19 +162,9 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // ✅ รายละเอียดที่อยู่
-                TextField(
-                  controller: detailController,
-                  decoration: const InputDecoration(
-                    labelText: "รายละเอียดที่อยู่",
-                    hintText: "เช่น บ้าน, ที่ทำงาน, ร้าน ฯลฯ",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                _buildTextField(detailController, "รายละเอียดที่อยู่"),
                 const SizedBox(height: 12),
 
-                // ปุ่มเพิ่มที่อยู่
                 ElevatedButton.icon(
                   onPressed: addAddress,
                   icon: const Icon(Icons.add_location_alt),
@@ -214,9 +175,7 @@ class _URegisterPageState extends State<URegisterPage> {
                   ),
                 ),
 
-                // แสดงรายการที่อยู่
-                if (addresses.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                if (addresses.isNotEmpty)
                   Column(
                     children: addresses.map((addr) {
                       return ListTile(
@@ -229,9 +188,10 @@ class _URegisterPageState extends State<URegisterPage> {
                       );
                     }).toList(),
                   ),
-                ],
 
                 const SizedBox(height: 20),
+
+                // 🔹 แผนที่
                 SizedBox(
                   height: 250,
                   child: FlutterMap(
@@ -240,13 +200,11 @@ class _URegisterPageState extends State<URegisterPage> {
                       initialCenter: currentPosition,
                       initialZoom: 15.2,
                       onTap: (tapPosition, point) {
-                        if (!mounted) return;
                         setState(() {
                           currentPosition = point;
                           addressController.text =
                               "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
                         });
-                        log("🖱️ Map tapped: $point");
                       },
                     ),
                     children: [
@@ -272,13 +230,12 @@ class _URegisterPageState extends State<URegisterPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // ✅ อัปโหลดรูป
+                // 🔹 อัปโหลดรูป
                 InkWell(
                   onTap: () async {
                     final picked = await picker.pickImage(
                       source: ImageSource.gallery,
                     );
-                    if (!mounted) return;
                     if (picked != null) {
                       setState(() => image = picked);
                     }
@@ -286,24 +243,21 @@ class _URegisterPageState extends State<URegisterPage> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      border: Border.all(color: Colors.grey.shade400),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.file_upload_outlined, color: Colors.black54),
-                        SizedBox(width: 8),
+                      children: [
+                        const Icon(
+                          Icons.file_upload_outlined,
+                          color: Colors.black54,
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          "เพิ่มรูปภาพ",
-                          style: TextStyle(
+                          image == null ? "เพิ่มรูปภาพ" : "เลือกรูปแล้ว ✅",
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -315,27 +269,45 @@ class _URegisterPageState extends State<URegisterPage> {
 
                 const SizedBox(height: 20),
 
-                // -------- Submit --------
+                // 🔹 ปุ่มสมัคร
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black87,
+                      backgroundColor: isLoading ? Colors.grey : Colors.black87,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: addData,
-                    child: const Text(
-                      "ลงทะเบียน User",
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
+                    onPressed: isLoading ? null : addData,
+                    child: isLoading
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                "กำลังลงทะเบียน...",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          )
+                        : const Text(
+                            "ลงทะเบียน User",
+                            style: TextStyle(fontSize: 16, color: Colors.white),
+                          ),
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 8),
 
-                // 🔹 ปุ่ม Sign in
                 TextButton(
                   onPressed: () => Get.to(() => const ULoginPage()),
                   child: const Text(
@@ -351,6 +323,24 @@ class _URegisterPageState extends State<URegisterPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ✅ helper UI
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label, {
+    bool obscure = false,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
     );
   }
@@ -371,23 +361,22 @@ class _URegisterPageState extends State<URegisterPage> {
     return await Geolocator.getCurrentPosition();
   }
 
+  // ✅ ฟังก์ชันสมัคร (มีโหลดดิ้ง + ตรวจข้อมูลครบ)
   void addData() async {
-    if (passwordController.text.trim() !=
-        confirmPasswordController.text.trim()) {
-      Get.snackbar(
-        'รหัสผ่านไม่ตรงกัน',
-        'กรุณากรอกรหัสผ่านให้ตรงกัน',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-      return;
-    }
+    final username = usernameController.text.trim();
+    final phone = phoneController.text.trim();
+    final password = passwordController.text.trim();
+    final confirm = confirmPasswordController.text.trim();
 
-    if (addresses.isEmpty) {
+    if (username.isEmpty ||
+        phone.isEmpty ||
+        password.isEmpty ||
+        confirm.isEmpty ||
+        image == null ||
+        addresses.isEmpty) {
       Get.snackbar(
-        'กรุณาเพิ่มที่อยู่',
-        'ต้องมีที่อยู่อย่างน้อย 1 รายการ',
+        'ข้อมูลไม่ครบ',
+        'กรุณากรอกทุกช่องและเพิ่มที่อยู่/รูปภาพ',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
@@ -395,69 +384,61 @@ class _URegisterPageState extends State<URegisterPage> {
       return;
     }
 
-    final hashedPassword = sha256
-        .convert(utf8.encode(passwordController.text.trim()))
-        .toString();
+    if (password != confirm) {
+      Get.snackbar(
+        'รหัสผ่านไม่ตรงกัน',
+        'กรุณากรอกให้ตรงกัน',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
 
-    String? imageUrlSupabase;
+    setState(() => isLoading = true);
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
 
     try {
+      final hashedPassword = sha256.convert(utf8.encode(password)).toString();
+      String? imageUrlSupabase;
+
       if (image != null) {
         final file = File(image!.path);
-        final safeName = image!.name.replaceAll(
-          RegExp(r'[^a-zA-Z0-9._-]'),
-          '_',
-        );
-        final fileName = "${DateTime.now().millisecondsSinceEpoch}_$safeName";
-
-        final supaFileName = "user_images/$fileName";
-        log("Uploading to Supabase path: $supaFileName");
-
-        try {
-          await Supabase.instance.client.storage
-              .from('user')
-              .upload(supaFileName, file);
-
-          imageUrlSupabase = Supabase.instance.client.storage
-              .from('user')
-              .getPublicUrl(supaFileName);
-
-          log("✅ Uploaded: $imageUrlSupabase");
-        } on StorageException catch (e) {
-          throw 'StorageException: ${e.message}';
-        } catch (e) {
-          throw 'Upload error: $e';
-        }
+        final fileName =
+            "user_images/${DateTime.now().millisecondsSinceEpoch}_${image!.name}";
+        await Supabase.instance.client.storage
+            .from('user')
+            .upload(fileName, file);
+        imageUrlSupabase = Supabase.instance.client.storage
+            .from('user')
+            .getPublicUrl(fileName);
       }
 
       final data = {
-        "username": usernameController.text.trim(),
-        "phone": phoneController.text.trim(),
+        "username": username,
+        "phone": phone,
         "password": hashedPassword,
         "imageSupabase": imageUrlSupabase ?? "",
         "addresses": addresses,
       };
 
-      await db
-          .collection('user')
-          .doc(usernameController.text.trim())
-          .set(data, SetOptions(merge: true));
+      await db.collection('user').doc(username).set(data);
 
-      if (!mounted) return;
+      if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
         'สำเร็จ',
-        'บันทึกข้อมูลเรียบร้อยแล้ว',
+        'ลงทะเบียนเรียบร้อยแล้ว',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
 
-      Get.to(() => const ULoginPage());
-    } catch (e, stack) {
-      if (!mounted) return;
-      log('❌ Error while saving user: $e');
-      log('Stack trace: $stack');
-
+      Get.offAll(() => const ULoginPage());
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
         'ผิดพลาด',
         'บันทึกข้อมูลไม่สำเร็จ: $e',
@@ -465,6 +446,8 @@ class _URegisterPageState extends State<URegisterPage> {
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 }

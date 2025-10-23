@@ -16,6 +16,7 @@ class RProfilePage extends StatefulWidget {
 
 class _RProfilePageState extends State<RProfilePage> {
   int _selectedIndex = 1;
+  bool isLoggingOut = false; // ✅ state โหลดดิ้ง
 
   void _onItemTapped(int index) {
     setState(() {
@@ -61,7 +62,9 @@ class _RProfilePageState extends State<RProfilePage> {
                       riderProvider.riderImageUrl!.isNotEmpty
                   ? NetworkImage(riderProvider.riderImageUrl!)
                   : null,
-              child: riderProvider.riderImageUrl == null
+              child:
+                  riderProvider.riderImageUrl == null ||
+                      riderProvider.riderImageUrl!.isEmpty
                   ? const Icon(Icons.person, size: 70, color: Colors.deepPurple)
                   : null,
             ),
@@ -78,7 +81,7 @@ class _RProfilePageState extends State<RProfilePage> {
             ),
             const SizedBox(height: 20),
 
-            // ปุ่มเปลี่ยนรหัสผ่าน (ลิงก์)
+            // ปุ่มเปลี่ยนรหัสผ่าน
             TextButton(
               onPressed: () {
                 Get.to(() => const RChangePasswordPage());
@@ -123,14 +126,50 @@ class _RProfilePageState extends State<RProfilePage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: () {
-                    riderProvider.clear();
-                    Get.offAll(() => const ULoginPage()); // ออกจากระบบ
-                  },
-                  child: const Text(
-                    "ออกจากระบบ",
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
+                  onPressed: isLoggingOut
+                      ? null
+                      : () async {
+                          setState(() => isLoggingOut = true);
+
+                          // ✅ แสดงโหลดดิ้งแบบ Dialog
+                          Get.dialog(
+                            const Center(child: CircularProgressIndicator()),
+                            barrierDismissible: false,
+                          );
+
+                          await Future.delayed(const Duration(seconds: 2));
+
+                          // เคลียร์ข้อมูลและกลับไปหน้า login
+                          riderProvider.clear();
+                          if (Get.isDialogOpen ?? false) Get.back();
+
+                          Get.offAll(() => const ULoginPage());
+
+                          setState(() => isLoggingOut = false);
+                        },
+                  child: isLoggingOut
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              "กำลังออกจากระบบ...",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        )
+                      : const Text(
+                          "ออกจากระบบ",
+                          style: TextStyle(fontSize: 16, color: Colors.white),
+                        ),
                 ),
               ),
             ),

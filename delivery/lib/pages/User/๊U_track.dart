@@ -257,7 +257,7 @@ class _UTrackPageState extends State<UTrackPage>
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  Get.to(() => const UTrackSend());
+                  Get.to(() => UTrackSend());
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
@@ -266,7 +266,7 @@ class _UTrackPageState extends State<UTrackPage>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("ดูแผนที่การส่ง"),
+                child: const Text("ติดตามการส่งทั้งหมด"),
               ),
             ),
             const SizedBox(width: 16),

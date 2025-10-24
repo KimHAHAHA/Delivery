@@ -63,7 +63,7 @@ class UDetailTrackPage extends StatelessWidget {
         centerTitle: true,
       ),
 
-      // ✅ ดึงข้อมูลออเดอร์นี้แบบเรียลไทม์
+      // ✅ ดึงข้อมูลออเดอร์แบบเรียลไทม์
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
@@ -90,10 +90,14 @@ class UDetailTrackPage extends StatelessWidget {
             _ => null,
           };
 
-          // ✅ จุดเป้าหมาย (ปลายทาง)
-          final double targetLat = (data["receiver_lat"] ?? 0).toDouble();
-          final double targetLng = (data["receiver_lng"] ?? 0).toDouble();
-          LatLng targetPos = LatLng(targetLat, targetLng);
+          // ✅ จุดพิกัด
+          final double senderLat = (data["sender_lat"] ?? 0).toDouble();
+          final double senderLng = (data["sender_lng"] ?? 0).toDouble();
+          final double receiverLat = (data["receiver_lat"] ?? 0).toDouble();
+          final double receiverLng = (data["receiver_lng"] ?? 0).toDouble();
+
+          final LatLng senderPos = LatLng(senderLat, senderLng);
+          final LatLng receiverPos = LatLng(receiverLat, receiverLng);
 
           // ✅ จุดเริ่มต้นไรเดอร์
           LatLng? riderPos;
@@ -107,12 +111,19 @@ class UDetailTrackPage extends StatelessWidget {
             }
           }
 
-          // ✅ สินค้าในออเดอร์
-          final List<dynamic> products = data["products"] ?? [];
+          // ✅ เลือกเป้าหมายตามสถานะ
+          // status 2 → จุดของผู้ส่ง
+          // status 3 → จุดของผู้รับ
+          LatLng targetPos = switch (status) {
+            2 => senderPos,
+            3 => receiverPos,
+            _ => receiverPos,
+          };
 
-          // ✅ แผนที่
+          // ✅ แสดง marker ตามสถานะ
           List<Marker> markers = [];
 
+          // ไรเดอร์ (ถ้ามี)
           if (riderPos != null) {
             markers.add(
               Marker(
@@ -126,6 +137,7 @@ class UDetailTrackPage extends StatelessWidget {
             );
           }
 
+          // เป้าหมาย (เปลี่ยนจุดตามสถานะ)
           markers.add(
             Marker(
               point: targetPos,
@@ -136,6 +148,9 @@ class UDetailTrackPage extends StatelessWidget {
               ),
             ),
           );
+
+          // ✅ สินค้าในออเดอร์
+          final List<dynamic> products = data["products"] ?? [];
 
           return Column(
             children: [
@@ -209,7 +224,7 @@ class UDetailTrackPage extends StatelessWidget {
                   child: const Center(child: Text("ไม่มีภาพประกอบในสถานะนี้")),
                 ),
 
-              // ✅ แผนที่ (เฉพาะไรเดอร์นี้)
+              // ✅ แผนที่
               Expanded(
                 child: FlutterMap(
                   options: MapOptions(

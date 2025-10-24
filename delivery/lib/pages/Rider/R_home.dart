@@ -20,56 +20,11 @@ class _RHomePageState extends State<RHomePage> {
   int _selectedIndex = 0;
   Position? currentPosition;
   bool isAccepting = false;
-  bool _checkingOngoing = true; // ✅ เช็คงานค้างตอนโหลด
 
   @override
   void initState() {
     super.initState();
-    _checkOngoingOrder(); // ✅ ตรวจงานค้างก่อนโหลด
     _getCurrentPosition();
-  }
-
-  // ✅ ตรวจว่ายังมีออเดอร์ที่ status < 4 หรือไม่
-  // ✅ ตรวจว่ายังมีออเดอร์ที่ status < 4 หรือไม่ (เวอร์ชัน debug)
-  Future<void> _checkOngoingOrder() async {
-    final rider = Provider.of<RiderProvider>(context, listen: false);
-    debugPrint("🟦 เริ่มตรวจงานค้าง...");
-    debugPrint("🧑‍✈️ rider.uid = ${rider.uid}");
-    debugPrint("🧑‍✈️ rider.username = ${rider.username}");
-
-    if (rider.uid == null || rider.uid!.isEmpty) {
-      debugPrint("⚠️ rider.uid ว่าง — ข้ามการตรวจงานค้าง");
-      setState(() => _checkingOngoing = false);
-      return;
-    }
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection("orders")
-          .where("rider_id", isEqualTo: rider.uid)
-          .where("status", isLessThan: 4)
-          .get();
-
-      debugPrint("📦 ดึงออเดอร์ที่ยังไม่จบสำเร็จ: ${query.docs.length} รายการ");
-
-      if (query.docs.isNotEmpty) {
-        final ongoing = query.docs.first;
-        debugPrint("✅ พบงานค้างอยู่: ${ongoing.id}");
-        debugPrint("📄 ข้อมูลบางส่วนของ order: ${ongoing.data()}");
-
-        // ✅ เพิ่มดีเลย์เล็กน้อยเพื่อให้ GetX ทำงานใน Build Context
-        Future.delayed(const Duration(milliseconds: 300), () {
-          debugPrint("➡️ ไปหน้า RTrackPage(orderId=${ongoing.id})");
-          Get.offAll(() => RTrackPage(orderId: ongoing.id));
-        });
-      } else {
-        debugPrint("❌ ไม่พบงานค้างใน Firestore");
-        setState(() => _checkingOngoing = false);
-      }
-    } catch (e) {
-      debugPrint("❌ ตรวจงานค้างล้มเหลว: $e");
-      setState(() => _checkingOngoing = false);
-    }
   }
 
   // ✅ ดึงพิกัดปัจจุบันของไรเดอร์
@@ -107,7 +62,7 @@ class _RHomePageState extends State<RHomePage> {
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
     if (index == 0) {
-      Get.offAll(() => const RHomePage());
+      Get.to(() => const RHomePage());
     } else {
       Get.to(() => const RProfilePage());
     }
@@ -127,7 +82,7 @@ class _RHomePageState extends State<RHomePage> {
     return "${distance.toStringAsFixed(0)} เมตร";
   }
 
-  // ✅ ฟังก์ชันรับงาน
+  // ✅ ฟังก์ชันรับงาน (Transaction ป้องกันแย่งงาน)
   Future<void> _acceptJob(
     String orderId,
     Map<String, dynamic> orderData,
@@ -135,24 +90,6 @@ class _RHomePageState extends State<RHomePage> {
   ) async {
     if (isAccepting) return;
     isAccepting = true;
-
-    // ✅ ตรวจว่ามีงานค้างอยู่ไหม
-    final ongoingJobs = await FirebaseFirestore.instance
-        .collection('orders')
-        .where('rider_id', isEqualTo: rider.uid)
-        .where('status', isLessThan: 4)
-        .get();
-
-    if (ongoingJobs.docs.isNotEmpty) {
-      Get.snackbar(
-        "🚫 รับงานไม่ได้",
-        "คุณมีงานที่ยังไม่เสร็จ โปรดจัดส่งให้เสร็จก่อนรับงานใหม่",
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-      );
-      isAccepting = false;
-      return;
-    }
 
     // ✅ ตรวจพิกัดผู้ส่ง
     final senderLat = (orderData["sender_lat"] ?? 0).toDouble();
@@ -169,13 +106,14 @@ class _RHomePageState extends State<RHomePage> {
       return;
     }
 
-    // ✅ ตรวจระยะทาง
+    // ✅ คำนวณระยะทางจากไรเดอร์ → ผู้ส่ง
     final distance = const Distance().as(
       LengthUnit.Meter,
       LatLng(currentPosition!.latitude, currentPosition!.longitude),
       LatLng(senderLat, senderLng),
     );
 
+    // ✅ บังคับให้อยู่ใกล้ผู้ส่งไม่เกิน 20 เมตรถึงจะรับได้
     if (distance > 20) {
       Get.snackbar(
         "อยู่ไกลจากจุดรับของเกินไป",
@@ -187,7 +125,7 @@ class _RHomePageState extends State<RHomePage> {
       return;
     }
 
-    // ✅ ถ้าผ่าน → อัปเดต Firestore
+    // ✅ ถ้าผ่านเงื่อนไข → ดำเนินการรับงานปกติ
     final ref = FirebaseFirestore.instance.collection('orders').doc(orderId);
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
@@ -228,7 +166,7 @@ class _RHomePageState extends State<RHomePage> {
       );
 
       await Future.delayed(const Duration(milliseconds: 500));
-      Get.offAll(() => RTrackPage(orderId: orderId));
+      Get.to(() => RTrackPage(orderId: orderId));
     } catch (e) {
       if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
@@ -246,14 +184,6 @@ class _RHomePageState extends State<RHomePage> {
   Widget build(BuildContext context) {
     final riderProvider = context.watch<RiderProvider>();
 
-    // ✅ ถ้ายังเช็คงานค้างอยู่ แสดง loading
-    if (_checkingOngoing) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF7DE1A4),
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
@@ -270,6 +200,7 @@ class _RHomePageState extends State<RHomePage> {
             .where("status", isEqualTo: 1)
             .where("rider_id", isNull: true)
             .snapshots(),
+
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -301,7 +232,10 @@ class _RHomePageState extends State<RHomePage> {
                   data["image_url_status1"] ?? data["image_url"] ?? "";
 
               return GestureDetector(
-                onTap: () => Get.to(() => RDetailPage(orderId: doc.id)),
+                onTap: () {
+                  // ✅ เปิดหน้า RDetailPage เมื่อคลิกที่งาน
+                  Get.to(() => RDetailPage(orderId: doc.id));
+                },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(16),
@@ -319,6 +253,7 @@ class _RHomePageState extends State<RHomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ✅ รูปสินค้า
                       Row(
                         children: [
                           ClipRRect(
@@ -374,7 +309,10 @@ class _RHomePageState extends State<RHomePage> {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 10),
+
+                      // ✅ ปุ่มรับงาน
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(

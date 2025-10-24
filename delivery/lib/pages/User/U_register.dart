@@ -361,7 +361,6 @@ class _URegisterPageState extends State<URegisterPage> {
     return await Geolocator.getCurrentPosition();
   }
 
-  // ✅ ฟังก์ชันสมัคร (มีโหลดดิ้ง + ตรวจ username ซ้ำ)
   void addData() async {
     final username = usernameController.text.trim();
     final phone = phoneController.text.trim();
@@ -411,6 +410,32 @@ class _URegisterPageState extends State<URegisterPage> {
         Get.snackbar(
           'ชื่อผู้ใช้งานซ้ำ',
           'ชื่อ "$username" ถูกใช้งานแล้ว กรุณาเลือกชื่ออื่น',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        setState(() => isLoading = false);
+        return; // ❌ หยุดการสมัคร
+      }
+
+      // ✅ ตรวจสอบเบอร์โทรศัพท์ซ้ำ
+      final phoneQueryUser = await db
+          .collection('user')
+          .where('phone', isEqualTo: phone)
+          .limit(1)
+          .get();
+
+      final phoneQueryRider = await db
+          .collection('rider')
+          .where('phone', isEqualTo: phone)
+          .limit(1)
+          .get();
+
+      if (phoneQueryUser.docs.isNotEmpty || phoneQueryRider.docs.isNotEmpty) {
+        if (Get.isDialogOpen ?? false) Get.back();
+        Get.snackbar(
+          'เบอร์โทรศัพท์ซ้ำ',
+          'เบอร์ "$phone" ถูกใช้ไปแล้ว กรุณาใช้เบอร์อื่น',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red,
           colorText: Colors.white,

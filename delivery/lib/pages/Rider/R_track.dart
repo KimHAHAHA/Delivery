@@ -316,15 +316,30 @@ class _RTrackPageState extends State<RTrackPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        "ปลายทาง: $targetName",
-                        style: const TextStyle(
+                      // 🏠 ต้นทางผู้ส่ง
+                      const Text(
+                        "ต้นทาง (ผู้ส่ง):",
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
-                      Text(targetAddress),
+                      Text("ชื่อ: ${data["sender_name"] ?? "-"}"),
+                      Text("เบอร์โทร: ${data["sender_phone"] ?? "-"}"),
+                      const SizedBox(height: 12),
+
+                      // 🎯 ปลายทางผู้รับ
+                      const Text(
+                        "ปลายทาง (ผู้รับ):",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text("ชื่อ: ${data["receiver_name"] ?? "-"}"),
+                      Text("เบอร์โทร: ${data["receiver_phone"] ?? "-"}"),
                       const SizedBox(height: 8),
+
                       Text(
                         statusText,
                         style: const TextStyle(
@@ -333,6 +348,8 @@ class _RTrackPageState extends State<RTrackPage> {
                         ),
                       ),
                       const SizedBox(height: 10),
+
+                      // 📷 ถ่ายภาพสถานะ
                       GestureDetector(
                         onTap: _pickImage,
                         child: Container(
@@ -369,6 +386,8 @@ class _RTrackPageState extends State<RTrackPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
+
+                      // 🔘 ปุ่มอัปเดตสถานะ
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(

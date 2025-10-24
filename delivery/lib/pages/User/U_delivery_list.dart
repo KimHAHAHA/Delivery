@@ -10,7 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UDeliveryList extends StatefulWidget {
-  final String uid; // ✅ รับ uid ของผู้ส่ง (ผู้ใช้ปัจจุบัน)
+  final String uid; // ✅ uid ของผู้ใช้ปัจจุบัน (ต้นเอง)
   const UDeliveryList({super.key, required this.uid});
 
   @override
@@ -38,7 +38,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
     _loadSenderAddresses();
   }
 
-  // ✅ โหลดที่อยู่ของผู้ส่ง (ผู้ใช้ปัจจุบัน)
+  // ✅ โหลดที่อยู่ของผู้ส่ง (เจ้าของบัญชี)
   Future<void> _loadSenderAddresses() async {
     try {
       final userDoc = await FirebaseFirestore.instance
@@ -51,7 +51,10 @@ class _UDeliveryListState extends State<UDeliveryList> {
       final data = userDoc.data()!;
       final List<dynamic> addrList = List.from(data['addresses'] ?? []);
       setState(() {
-        senderData = {"name": data['username'], "phone": data['phone']};
+        senderData = {
+          "name": data['username'] ?? "ไม่ทราบชื่อ",
+          "phone": data['phone'] ?? "-",
+        };
         senderAddresses = addrList.cast<Map<String, dynamic>>();
         selectedSenderAddress = senderAddresses.isNotEmpty
             ? senderAddresses.firstWhere(
@@ -61,7 +64,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
             : null;
       });
     } catch (e) {
-      debugPrint("❌ Error loading sender addresses: $e");
+      debugPrint("❌ โหลดที่อยู่ผู้ส่งไม่สำเร็จ: $e");
     }
   }
 
@@ -71,7 +74,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
     if (phone.isEmpty) {
       Get.snackbar(
         "แจ้งเตือน",
-        "กรุณากรอกหมายเลขโทรศัพท์ก่อนค้นหา",
+        "กรุณากรอกเบอร์โทรศัพท์ก่อนค้นหา",
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -104,7 +107,10 @@ class _UDeliveryListState extends State<UDeliveryList> {
       final List<dynamic> addrList = List.from(data['addresses'] ?? []);
 
       setState(() {
-        receiverData = {"name": data['username'], "phone": data['phone']};
+        receiverData = {
+          "name": data['username'] ?? "ไม่ทราบชื่อ",
+          "phone": data['phone'] ?? "-",
+        };
         receiverAddresses = addrList.cast<Map<String, dynamic>>();
         selectedReceiverAddress = receiverAddresses.isNotEmpty
             ? receiverAddresses.firstWhere(
@@ -159,10 +165,8 @@ class _UDeliveryListState extends State<UDeliveryList> {
     }
   }
 
-  // ✅ บันทึกข้อมูลลง Firestore + อัปโหลดภาพไป Supabase
-  // ✅ บันทึกข้อมูลลง Firestore + อัปโหลดภาพไป Supabase
+  // ✅ บันทึกคำสั่ง
   Future<void> _saveOrder() async {
-    // ✅ ตรวจสอบข้อมูลผู้ส่ง
     if (senderData == null || selectedSenderAddress == null) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -173,7 +177,6 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
-    // ✅ ตรวจสอบข้อมูลผู้รับ
     if (receiverData == null || selectedReceiverAddress == null) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -184,7 +187,6 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
-    // ✅ ตรวจสอบสินค้า
     if (products.isEmpty) {
       Get.snackbar(
         "แจ้งเตือน",
@@ -195,25 +197,22 @@ class _UDeliveryListState extends State<UDeliveryList> {
       return;
     }
 
-    // ✅ ตรวจสอบว่ามีภาพสินค้าหรือยัง
     if (productImage == null) {
       Get.snackbar(
         "แจ้งเตือน",
-        "กรุณาถ่ายหรือเลือกรูปสินค้าก่อนกดยืนยัน",
+        "กรุณาแนบรูปสินค้าก่อนบันทึก",
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
       return;
     }
 
-    // ✅ แสดงโหลดดิ้งระหว่างบันทึก
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
       barrierDismissible: false,
     );
 
     try {
-      // ✅ อัปโหลดรูปสินค้าขึ้น Supabase
       String? imageUrl;
       if (productImage != null) {
         final fileName = "order_${DateTime.now().millisecondsSinceEpoch}.jpg";
@@ -225,23 +224,17 @@ class _UDeliveryListState extends State<UDeliveryList> {
             .getPublicUrl(fileName);
       }
 
-      // ✅ บันทึกข้อมูลคำสั่งลง Firestore
       await FirebaseFirestore.instance.collection("orders").add({
-        // ผู้ส่ง
         "sender_name": senderData!["name"],
         "sender_phone": senderData!["phone"],
         "sender_address": selectedSenderAddress!['detail'],
         "sender_lat": selectedSenderAddress!['lat'],
         "sender_lng": selectedSenderAddress!['lng'],
-
-        // ผู้รับ
         "receiver_name": receiverData!["name"],
         "receiver_phone": receiverData!["phone"],
         "receiver_address": selectedReceiverAddress!['detail'],
         "receiver_lat": selectedReceiverAddress!['lat'],
         "receiver_lng": selectedReceiverAddress!['lng'],
-
-        // สินค้าและรูป
         "products": products,
         "image_url": imageUrl ?? "",
         "status": 1,
@@ -253,7 +246,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
 
       Get.snackbar(
         "สำเร็จ",
-        "บันทึกคำสั่งส่งสินค้าเรียบร้อยแล้ว 🎉",
+        "บันทึกคำสั่งส่งสินค้าเรียบร้อย 🎉",
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -298,57 +291,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ ส่วนเลือกที่อยู่ผู้ส่ง
-            if (senderData != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "ที่อยู่ผู้ส่ง (${senderData!["name"]})",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<Map<String, dynamic>>(
-                      value: selectedSenderAddress,
-                      items: senderAddresses.map((addr) {
-                        return DropdownMenuItem(
-                          value: addr,
-                          child: Text(addr['detail'] ?? "ไม่มีรายละเอียด"),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => selectedSenderAddress = value!);
-                      },
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ✅ ค้นหาผู้รับ
+            // 🔍 ค้นหาผู้รับ
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
@@ -374,10 +317,9 @@ class _UDeliveryListState extends State<UDeliveryList> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
 
-            // ✅ ข้อมูลผู้รับ
+            // ✅ ฟอร์มผู้ส่ง/ผู้รับ (แสดงหลังค้นหาผู้รับสำเร็จ)
             if (receiverData != null)
               Container(
                 width: double.infinity,
@@ -396,15 +338,46 @@ class _UDeliveryListState extends State<UDeliveryList> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 🧍‍♂️ ผู้ส่ง (ชื่อของต้นเอง)
                     Text(
-                      receiverData!["name"],
+                      "ผู้ส่ง (ฉัน): ${senderData?["name"] ?? "-"}",
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Text(receiverData!["phone"]),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      value: selectedSenderAddress,
+                      items: senderAddresses.map((addr) {
+                        return DropdownMenuItem(
+                          value: addr,
+                          child: Text(addr['detail'] ?? "ไม่มีรายละเอียด"),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() => selectedSenderAddress = value!);
+                      },
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 🏠 ผู้รับ (จากการค้นหา)
+                    Text(
+                      "ผู้รับ (จากผลค้นหา): ${receiverData!["name"]}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text("เบอร์โทร: ${receiverData!["phone"]}"),
+                    const SizedBox(height: 8),
                     DropdownButtonFormField<Map<String, dynamic>>(
                       value: selectedReceiverAddress,
                       items: receiverAddresses.map((addr) {
@@ -425,8 +398,8 @@ class _UDeliveryListState extends State<UDeliveryList> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
 
+                    const SizedBox(height: 15),
                     SizedBox(
                       height: 150,
                       child: FlutterMap(
@@ -435,12 +408,15 @@ class _UDeliveryListState extends State<UDeliveryList> {
                         options: MapOptions(
                           initialCenter: position,
                           initialZoom: 15,
+                          // ✅ ปิดการเลื่อนและซูมทั้งหมด
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.none, // 🔒 ล็อกทุกอย่าง
+                          ),
                         ),
                         children: [
                           TileLayer(
                             urlTemplate:
                                 'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
-                            userAgentPackageName: 'net.delivery.user',
                           ),
                           MarkerLayer(
                             markers: [
@@ -457,6 +433,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 16),
                     const Text(
                       "ข้อมูลสินค้า",
@@ -500,6 +477,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
                         style: TextStyle(color: Colors.blue),
                       ),
                     ),
+
                     const SizedBox(height: 10),
                     GestureDetector(
                       onTap: _pickImage,
@@ -536,6 +514,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
                               ),
                       ),
                     ),
+
                     const SizedBox(height: 15),
                     SizedBox(
                       width: double.infinity,
@@ -547,24 +526,7 @@ class _UDeliveryListState extends State<UDeliveryList> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onPressed: () {
-                          // ✅ ตรวจสอบก่อนกดส่ง
-                          if (senderData == null ||
-                              selectedSenderAddress == null ||
-                              receiverData == null ||
-                              selectedReceiverAddress == null ||
-                              products.isEmpty ||
-                              productImage == null) {
-                            Get.snackbar(
-                              "ข้อมูลไม่ครบ",
-                              "กรุณากรอกและแนบข้อมูลให้ครบก่อนกดยืนยัน",
-                              backgroundColor: Colors.orange,
-                              colorText: Colors.white,
-                            );
-                            return;
-                          }
-                          _saveOrder();
-                        },
+                        onPressed: _saveOrder,
                         child: const Text(
                           "ยืนยันการส่ง",
                           style: TextStyle(fontSize: 16, color: Colors.white),

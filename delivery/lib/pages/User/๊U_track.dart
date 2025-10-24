@@ -37,7 +37,7 @@ class _UTrackPageState extends State<UTrackPage>
       case 2:
         return "กำลังเดินทางมารับสินค้า";
       case 3:
-        return "ไรเดอร์รับสินค้าแล้ว กำลังจัดส่ง";
+        return "รับสินค้าแล้ว กำลังจัดส่ง";
       case 4:
         return "จัดส่งสำเร็จ";
       default:
@@ -266,7 +266,7 @@ class _UTrackPageState extends State<UTrackPage>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("ติดตามการส่งทั้งหมด"),
+                child: const Text("การส่งทั้งหมด"),
               ),
             ),
             const SizedBox(width: 16),

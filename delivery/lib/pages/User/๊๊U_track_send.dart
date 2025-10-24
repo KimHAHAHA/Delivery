@@ -40,7 +40,7 @@ class UTrackSend extends StatelessWidget {
     }
   }
 
-  // ✅ สีสำหรับแต่ละไรเดอร์
+  // ✅ สีของไรเดอร์แต่ละคน
   final List<Color> riderColors = [
     Colors.redAccent,
     Colors.orangeAccent,
@@ -71,8 +71,6 @@ class UTrackSend extends StatelessWidget {
       );
     }
 
-    print("👤 Current sender (from Provider): $username");
-
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
@@ -97,7 +95,7 @@ class UTrackSend extends StatelessWidget {
         centerTitle: true,
       ),
 
-      // ✅ ดึงออเดอร์ทั้งหมดของ user
+      // ✅ ดึงข้อมูลออเดอร์ทั้งหมดของผู้ใช้
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
@@ -110,9 +108,6 @@ class UTrackSend extends StatelessWidget {
           }
 
           final orders = snapshot.data!.docs;
-          print(
-            "📦 พบออเดอร์ทั้งหมด ${orders.length} รายการของผู้ใช้ $username",
-          );
 
           if (orders.isEmpty) {
             return const Center(
@@ -120,7 +115,6 @@ class UTrackSend extends StatelessWidget {
             );
           }
 
-          // ✅ เก็บ Marker ทั้งหมด
           List<Marker> markers = [];
           LatLng? firstPos;
 
@@ -128,12 +122,8 @@ class UTrackSend extends StatelessWidget {
             final doc = orders[i];
             final data = doc.data() as Map<String, dynamic>;
             final status = data["status"] ?? 0;
+            final Color riderColor = riderColors[i % riderColors.length];
 
-            // สีของไรเดอร์แต่ละคน
-            final Color riderColor =
-                riderColors[i % riderColors.length]; // หมุนสี
-
-            // ✅ ดึงตำแหน่งที่เกี่ยวข้อง
             final riderLoc = data["rider_location"];
             final double senderLat = (data["sender_lat"] ?? 0).toDouble();
             final double senderLng = (data["sender_lng"] ?? 0).toDouble();
@@ -143,7 +133,6 @@ class UTrackSend extends StatelessWidget {
             final LatLng senderPos = LatLng(senderLat, senderLng);
             final LatLng receiverPos = LatLng(receiverLat, receiverLng);
 
-            // ✅ จุดของไรเดอร์ (ตำแหน่งปัจจุบัน)
             LatLng? riderPos;
             if (riderLoc != null &&
                 riderLoc["lat"] != null &&
@@ -155,35 +144,47 @@ class UTrackSend extends StatelessWidget {
               firstPos ??= riderPos;
             }
 
-            // ✅ จุดเป้าหมายตามสถานะ
             LatLng targetPos = switch (status) {
-              2 => senderPos, // ไปหาผู้ส่ง
-              3 => receiverPos, // ไปหาผู้รับ
+              2 => senderPos,
+              3 => receiverPos,
               _ => receiverPos,
             };
 
-            // ✅ Marker ไรเดอร์
+            // ✅ Marker ไรเดอร์ (เปลี่ยนจากข้อความแดงเป็นชื่อไรเดอร์)
             if (riderPos != null) {
               markers.add(
                 Marker(
                   point: riderPos,
-                  width: 45,
-                  height: 45,
+                  width: 80,
+                  height: 60,
                   child: Column(
                     children: [
                       Icon(Icons.delivery_dining, color: riderColor, size: 36),
+                      const SizedBox(height: 2),
                       Container(
-                        padding: const EdgeInsets.all(2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
                         child: Text(
                           data["rider_name"] ?? "ไรเดอร์",
-                          style: const TextStyle(
-                            fontSize: 10,
+                          style: TextStyle(
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
+                            color: riderColor,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
@@ -207,120 +208,217 @@ class UTrackSend extends StatelessWidget {
             );
           }
 
-          // ✅ สร้าง UI หลัก
-          return Column(
+          return Stack(
             children: [
-              // 🗺️ แผนที่แสดงทุกคัน
-              Expanded(
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter:
-                        firstPos ?? const LatLng(13.736717, 100.523186),
-                    initialZoom: 13,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
-                    ),
-                    MarkerLayer(markers: markers),
-                  ],
+              // 🗺️ แผนที่
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter:
+                      firstPos ?? const LatLng(13.736717, 100.523186),
+                  initialZoom: 13,
                 ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                  ),
+                  MarkerLayer(markers: markers),
+                ],
               ),
 
-              // 🔹 รายละเอียดไรเดอร์แต่ละคน
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "รายละเอียดไรเดอร์ที่กำลังจัดส่ง",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
+              // ✅ Bottom Sheet (เลื่อนดูรายละเอียดได้)
+              DraggableScrollableSheet(
+                initialChildSize: 0.25,
+                minChildSize: 0.2,
+                maxChildSize: 0.85,
+                builder: (context, scrollController) {
+                  return Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
                       ),
-                      const Divider(thickness: 1),
-                      ...orders.asMap().entries.map((entry) {
-                        final i = entry.key;
-                        final doc = entry.value;
-                        final data = doc.data() as Map<String, dynamic>;
-                        final status = data["status"] ?? 0;
-                        final imageUrl = data["rider_image_url"];
-                        final riderColor = riderColors[i % riderColors.length];
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: riderColor,
-                                backgroundImage:
-                                    (imageUrl != null &&
-                                        imageUrl.toString().isNotEmpty)
-                                    ? NetworkImage(imageUrl)
-                                    : const AssetImage(
-                                            "assets/images/profile.png",
-                                          )
-                                          as ImageProvider,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 60,
+                              height: 5,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[400],
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: riderColor,
-                                      ),
-                                    ),
-                                    Text(
-                                      "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
-                                    ),
-                                    Text(
-                                      "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
-                                    ),
-                                    Text(
-                                      "สถานะ: ${_statusText(status)}",
-                                      style: TextStyle(
-                                        color: _statusColor(status),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    if (data["products"] != null)
-                                      Text(
-                                        "สินค้า: ${(data["products"] as List).map((p) => p["name"]).join(', ')}",
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.delivery_dining,
-                                color: riderColor,
-                                size: 28,
-                              ),
-                            ],
+                            ),
                           ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                ),
+                          const Text(
+                            "รายละเอียดไรเดอร์ที่กำลังจัดส่ง",
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const Divider(thickness: 1),
+                          ...orders.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final doc = entry.value;
+                            final data = doc.data() as Map<String, dynamic>;
+                            final status = data["status"] ?? 0;
+                            final imageUrl = data["rider_image_url"];
+                            final riderColor =
+                                riderColors[i % riderColors.length];
+                            final List<dynamic> products =
+                                data["products"] ?? [];
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 24,
+                                        backgroundColor: riderColor,
+                                        backgroundImage:
+                                            (imageUrl != null &&
+                                                imageUrl.toString().isNotEmpty)
+                                            ? NetworkImage(imageUrl)
+                                            : const AssetImage(
+                                                    "assets/images/profile.png",
+                                                  )
+                                                  as ImageProvider,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: riderColor,
+                                              ),
+                                            ),
+                                            Text(
+                                              "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
+                                            ),
+                                            Text(
+                                              "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
+                                            ),
+                                            Text(
+                                              "สถานะ: ${_statusText(status)}",
+                                              style: TextStyle(
+                                                color: _statusColor(status),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.delivery_dining,
+                                        color: riderColor,
+                                        size: 28,
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    "🛍️ รายการสินค้า:",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+
+                                  // ✅ แสดงสินค้า
+                                  if (products.isNotEmpty)
+                                    Column(
+                                      children: products.map((p) {
+                                        final name = p["name"] ?? "-";
+                                        final qtyRaw = p["qty"];
+
+                                        final qty = (qtyRaw is String)
+                                            ? int.tryParse(qtyRaw) ?? 1
+                                            : (qtyRaw is num
+                                                  ? qtyRaw.toInt()
+                                                  : 1);
+
+                                        return Container(
+                                          margin: const EdgeInsets.symmetric(
+                                            vertical: 4,
+                                          ),
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[100],
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.grey.shade300,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      name,
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                    Text("จำนวน: $qty ชิ้น"),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    )
+                                  else
+                                    const Text("ไม่มีข้อมูลสินค้า"),
+                                  const Divider(thickness: 1),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           );

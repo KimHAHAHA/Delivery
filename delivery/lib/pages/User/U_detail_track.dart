@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:photo_view/photo_view.dart';
 
 class UDetailTrackPage extends StatelessWidget {
   final String orderId;
@@ -62,8 +63,6 @@ class UDetailTrackPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-
-      // ✅ ดึงข้อมูลออเดอร์แบบเรียลไทม์
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
@@ -81,7 +80,6 @@ class UDetailTrackPage extends StatelessWidget {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final status = data["status"] ?? 1;
 
-          // ✅ เลือกรูปตามสถานะ
           final imageUrl = switch (status) {
             1 => data["image_url"],
             2 => data["image_url"],
@@ -90,7 +88,6 @@ class UDetailTrackPage extends StatelessWidget {
             _ => null,
           };
 
-          // ✅ จุดพิกัด
           final double senderLat = (data["sender_lat"] ?? 0).toDouble();
           final double senderLng = (data["sender_lng"] ?? 0).toDouble();
           final double receiverLat = (data["receiver_lat"] ?? 0).toDouble();
@@ -99,7 +96,6 @@ class UDetailTrackPage extends StatelessWidget {
           final LatLng senderPos = LatLng(senderLat, senderLng);
           final LatLng receiverPos = LatLng(receiverLat, receiverLng);
 
-          // ✅ จุดเริ่มต้นไรเดอร์
           LatLng? riderPos;
           if (data["rider_location"] != null) {
             final loc = data["rider_location"];
@@ -111,19 +107,14 @@ class UDetailTrackPage extends StatelessWidget {
             }
           }
 
-          // ✅ เลือกเป้าหมายตามสถานะ
-          // status 2 → จุดของผู้ส่ง
-          // status 3 → จุดของผู้รับ
           LatLng targetPos = switch (status) {
             2 => senderPos,
             3 => receiverPos,
             _ => receiverPos,
           };
 
-          // ✅ แสดง marker ตามสถานะ
           List<Marker> markers = [];
 
-          // ไรเดอร์ (ถ้ามี)
           if (riderPos != null) {
             markers.add(
               Marker(
@@ -137,7 +128,6 @@ class UDetailTrackPage extends StatelessWidget {
             );
           }
 
-          // เป้าหมาย (เปลี่ยนจุดตามสถานะ)
           markers.add(
             Marker(
               point: targetPos,
@@ -149,206 +139,275 @@ class UDetailTrackPage extends StatelessWidget {
             ),
           );
 
-          // ✅ สินค้าในออเดอร์
           final List<dynamic> products = data["products"] ?? [];
 
-          return Column(
+          return Stack(
             children: [
-              // ✅ แถบสถานะ
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: _statusColor(status),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Colors.white,
-                      child: Text(
-                        "$status",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: _statusColor(status),
-                        ),
-                      ),
+              /// ✅ พื้นหลัง: แผนที่ + ภาพ
+              Column(
+                children: [
+                  // แถบสถานะ
+                  Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _statusText(status),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                    decoration: BoxDecoration(
+                      color: _statusColor(status),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                ),
-              ),
-
-              // ✅ รูปภาพสถานะ
-              if (imageUrl != null && imageUrl.toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      imageUrl,
-                      height: 200,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(child: Text("ไม่มีภาพประกอบในสถานะนี้")),
-                ),
-
-              // ✅ แผนที่
-              Expanded(
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: riderPos ?? targetPos,
-                    initialZoom: 13,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
-                    ),
-                    MarkerLayer(markers: markers),
-                  ],
-                ),
-              ),
-
-              // ✅ รายละเอียดไรเดอร์ + สินค้า
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // --- ข้อมูลไรเดอร์ ---
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundImage:
-                                data["rider_image_url"] != null &&
-                                    data["rider_image_url"]
-                                        .toString()
-                                        .isNotEmpty
-                                ? NetworkImage(data["rider_image_url"])
-                                : const AssetImage("assets/images/profile.png")
-                                      as ImageProvider,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text("เบอร์โทร: ${data["rider_phone"] ?? "-"}"),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
-                                ),
-                              ],
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 14,
+                          backgroundColor: Colors.white,
+                          child: Text(
+                            "$status",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _statusColor(status),
                             ),
                           ),
-                          const Icon(
-                            Icons.directions_bike,
-                            size: 32,
-                            color: Colors.black87,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      const Divider(thickness: 1),
-
-                      // --- รายการสินค้า ---
-                      const Text(
-                        "รายการสินค้าในออเดอร์นี้:",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _statusText(status),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ✅ รูปภาพ (กดดูเต็มได้)
+                  if (imageUrl != null && imageUrl.toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
-                      const SizedBox(height: 6),
-                      if (products.isNotEmpty)
-                        ...products.map((item) {
-                          final name = item["name"] ?? "-";
-                          final qty = item["qty"] ?? "1";
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.shopping_bag_outlined,
-                                  size: 20,
-                                  color: Colors.black54,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    "$name",
-                                    style: const TextStyle(fontSize: 15),
+                      child: GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => Scaffold(
+                              backgroundColor: Colors.black,
+                              body: Stack(
+                                children: [
+                                  PhotoView(
+                                    imageProvider: NetworkImage(imageUrl),
+                                    backgroundDecoration: const BoxDecoration(
+                                      color: Colors.black,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  "x$qty",
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
+                                  Positioned(
+                                    top: 40,
+                                    left: 20,
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 30,
+                                      ),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
-                        }).toList()
-                      else
-                        const Text("ไม่มีข้อมูลสินค้า"),
-                    ],
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            height: 150,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text("ไม่มีภาพประกอบในสถานะนี้"),
+                      ),
+                    ),
+
+                  // ✅ แผนที่
+                  Expanded(
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: riderPos ?? targetPos,
+                        initialZoom: 13,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.thunderforest.com/atlas/{z}/{x}/{y}.png?apikey=08c89dd3f9ae427b904737c50b61cb53',
+                        ),
+                        MarkerLayer(markers: markers),
+                      ],
+                    ),
                   ),
-                ),
+                ],
+              ),
+
+              /// ✅ ชั้นบนสุด: ฟอร์มข้อมูลที่เลื่อนได้ (Bottom Sheet)
+              DraggableScrollableSheet(
+                initialChildSize: 0.25, // เริ่มต้นเปิด 25%
+                minChildSize: 0.2,
+                maxChildSize: 0.8, // ดึงขึ้นได้ถึง 80% ของจอ
+                builder: (context, scrollController) {
+                  return Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 60,
+                              height: 5,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[400],
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                radius: 28,
+                                backgroundImage:
+                                    data["rider_image_url"] != null &&
+                                        data["rider_image_url"]
+                                            .toString()
+                                            .isNotEmpty
+                                    ? NetworkImage(data["rider_image_url"])
+                                    : const AssetImage(
+                                            "assets/images/profile.png",
+                                          )
+                                          as ImageProvider,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "ชื่อไรเดอร์: ${data["rider_name"] ?? "-"}",
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "เบอร์โทร: ${data["rider_phone"] ?? "-"}",
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "ป้ายทะเบียน: ${data["vehicleController"] ?? data["vehicle_plate"] ?? "-"}",
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.directions_bike,
+                                size: 32,
+                                color: Colors.black87,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          const Divider(thickness: 1),
+
+                          const Text(
+                            "รายการสินค้าในออเดอร์นี้:",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          if (products.isNotEmpty)
+                            ...products.map((item) {
+                              final name = item["name"] ?? "-";
+                              final qty = item["qty"] ?? "1";
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.shopping_bag_outlined,
+                                      size: 20,
+                                      color: Colors.black54,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        "$name",
+                                        style: const TextStyle(fontSize: 15),
+                                      ),
+                                    ),
+                                    Text(
+                                      "x$qty",
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList()
+                          else
+                            const Text("ไม่มีข้อมูลสินค้า"),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           );

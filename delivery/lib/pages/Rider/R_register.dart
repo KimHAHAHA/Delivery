@@ -253,6 +253,26 @@ class _RRegisterPageState extends State<RRegisterPage> {
 
       String? riderImageUrl;
       String? vehicleImageUrl;
+      final userDoc = await FirebaseFirestore.instance
+          .collection('user')
+          .doc(username)
+          .get();
+      final riderDoc = await FirebaseFirestore.instance
+          .collection('rider')
+          .doc(username)
+          .get();
+
+      if (userDoc.exists || riderDoc.exists) {
+        if (Get.isDialogOpen ?? false) Get.back();
+        Get.snackbar(
+          'ชื่อผู้ใช้งานซ้ำ',
+          'ชื่อ "$username" ถูกใช้แล้ว กรุณาเลือกชื่ออื่น',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        setState(() => isLoading = false);
+        return; // ❌ หยุดการทำงาน
+      }
 
       // 🔹 อัปโหลดรูปโปรไฟล์
       if (riderProfileImage != null) {

@@ -361,7 +361,7 @@ class _URegisterPageState extends State<URegisterPage> {
     return await Geolocator.getCurrentPosition();
   }
 
-  // ✅ ฟังก์ชันสมัคร (มีโหลดดิ้ง + ตรวจข้อมูลครบ)
+  // ✅ ฟังก์ชันสมัคร (มีโหลดดิ้ง + ตรวจ username ซ้ำ)
   void addData() async {
     final username = usernameController.text.trim();
     final phone = phoneController.text.trim();
@@ -402,6 +402,24 @@ class _URegisterPageState extends State<URegisterPage> {
     );
 
     try {
+      // ✅ ตรวจว่า username มีอยู่แล้วใน "user" หรือ "rider" หรือไม่
+      final userDoc = await db.collection('user').doc(username).get();
+      final riderDoc = await db.collection('rider').doc(username).get();
+
+      if (userDoc.exists || riderDoc.exists) {
+        if (Get.isDialogOpen ?? false) Get.back();
+        Get.snackbar(
+          'ชื่อผู้ใช้งานซ้ำ',
+          'ชื่อ "$username" ถูกใช้งานแล้ว กรุณาเลือกชื่ออื่น',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        setState(() => isLoading = false);
+        return; // ❌ หยุดการสมัคร
+      }
+
+      // ✅ เข้าสู่ขั้นตอนบันทึกปกติ
       final hashedPassword = sha256.convert(utf8.encode(password)).toString();
       String? imageUrlSupabase;
 
@@ -423,6 +441,7 @@ class _URegisterPageState extends State<URegisterPage> {
         "password": hashedPassword,
         "imageSupabase": imageUrlSupabase ?? "",
         "addresses": addresses,
+        "createdAt": FieldValue.serverTimestamp(),
       };
 
       await db.collection('user').doc(username).set(data);
@@ -430,7 +449,7 @@ class _URegisterPageState extends State<URegisterPage> {
       if (Get.isDialogOpen ?? false) Get.back();
       Get.snackbar(
         'สำเร็จ',
-        'ลงทะเบียนเรียบร้อยแล้ว',
+        'ลงทะเบียนเรียบร้อยแล้ว 🎉',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green,
         colorText: Colors.white,

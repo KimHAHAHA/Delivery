@@ -25,6 +25,35 @@ class _RHomePageState extends State<RHomePage> {
   void initState() {
     super.initState();
     _getCurrentPosition();
+    _checkOngoingOrder();
+  }
+
+  Future<void> _checkOngoingOrder() async {
+    final rider = context.read<RiderProvider>();
+    if (rider.uid == null) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('rider_id', isEqualTo: rider.uid)
+          .where('status', whereIn: [2, 3])
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final ongoingOrder = query.docs.first;
+        debugPrint("🚚 พบงานค้างอยู่: ${ongoingOrder.id}");
+
+        // ✅ ส่งไปหน้า RTrackPage ทันที
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Get.offAll(() => RTrackPage(orderId: ongoingOrder.id));
+        });
+      } else {
+        debugPrint("✅ ไม่มีงานค้างในสถานะ 2 หรือ 3");
+      }
+    } catch (e) {
+      debugPrint("❌ Error checking ongoing orders: $e");
+    }
   }
 
   // ✅ ดึงพิกัดปัจจุบันของไรเดอร์

@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:photo_view/photo_view.dart'; // ✅ เพิ่ม library ดูภาพเต็ม
 import 'package:provider/provider.dart';
 
 class RDetailPage extends StatefulWidget {
@@ -213,27 +214,65 @@ class _RDetailPageState extends State<RDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // รูปสินค้า
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: imageUrl.isNotEmpty
-                            ? Image.network(
+                      // ✅ รูปภาพสินค้า (กดดูเต็มจอได้)
+                      if (imageUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: GestureDetector(
+                            onTap: () {
+                              Get.to(
+                                () => Scaffold(
+                                  backgroundColor: Colors.black,
+                                  body: Stack(
+                                    children: [
+                                      PhotoView(
+                                        imageProvider: NetworkImage(imageUrl),
+                                        backgroundDecoration:
+                                            const BoxDecoration(
+                                              color: Colors.black,
+                                            ),
+                                      ),
+                                      Positioned(
+                                        top: 40,
+                                        left: 20,
+                                        child: IconButton(
+                                          icon: const Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 30,
+                                          ),
+                                          onPressed: () => Get.back(),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: Image.network(
                                 imageUrl,
-                                height: 220,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                              )
-                            : Container(
-                                height: 220,
-                                width: double.infinity,
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.image, size: 50),
                               ),
-                      ),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 220,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: Colors.grey[300],
+                          ),
+                          child: const Icon(Icons.image, size: 50),
+                        ),
                       const SizedBox(height: 20),
 
                       _sectionHeader("📦 ข้อมูลผู้ส่ง"),
-                      _infoCard([
+                      _fullWidthCard([
                         Text("ชื่อผู้ส่ง: $senderName"),
                         Text("เบอร์โทร: $senderPhone"),
                         const SizedBox(height: 8),
@@ -243,10 +282,10 @@ class _RDetailPageState extends State<RDetailPage> {
                         ),
                         Text(addressSender),
                       ]),
-
                       const SizedBox(height: 16),
+
                       _sectionHeader("🏠 ข้อมูลผู้รับ"),
-                      _infoCard([
+                      _fullWidthCard([
                         Text("ชื่อผู้รับ: $receiverName"),
                         Text("เบอร์โทร: $receiverPhone"),
                         const SizedBox(height: 8),
@@ -259,7 +298,7 @@ class _RDetailPageState extends State<RDetailPage> {
 
                       const SizedBox(height: 16),
                       _sectionHeader("🛍️ รายการสินค้า"),
-                      _infoCard(
+                      _fullWidthCard(
                         products.isEmpty
                             ? [const Text("- ไม่มีข้อมูลสินค้า -")]
                             : products.map<Widget>((p) {
@@ -328,7 +367,7 @@ class _RDetailPageState extends State<RDetailPage> {
                 ),
               ),
 
-              // ปุ่มรับงาน
+              // ✅ ปุ่มรับงาน
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -383,7 +422,6 @@ class _RDetailPageState extends State<RDetailPage> {
         },
       ),
 
-      // Bottom Navigation
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -395,8 +433,6 @@ class _RDetailPageState extends State<RDetailPage> {
       ),
     );
   }
-
-  /// ===== Widget ย่อย =====
 
   Widget _sectionHeader(String title) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -410,14 +446,19 @@ class _RDetailPageState extends State<RDetailPage> {
     ),
   );
 
-  Widget _infoCard(List<Widget> children) => Card(
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
+  Widget _fullWidthCard(List<Widget> children) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.symmetric(vertical: 4),
+    child: Card(
+      color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
       ),
     ),
   );

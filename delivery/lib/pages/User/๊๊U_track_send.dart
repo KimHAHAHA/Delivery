@@ -1,11 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 class UTrackSend extends StatelessWidget {
-  final String username; // ✅ ชื่อผู้ใช้ (เรา)
-  const UTrackSend({super.key, required this.username});
+  const UTrackSend({super.key});
 
   String _statusText(int status) {
     switch (status) {
@@ -39,6 +40,24 @@ class UTrackSend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ ดึง username จาก Provider (แทนการรับจาก constructor)
+    final userProvider = context.watch<UserProvider>();
+    final username = userProvider.username;
+
+    if (username == null || username.isEmpty) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF7DE1A4),
+        body: Center(
+          child: Text(
+            "⚠️ กรุณาเข้าสู่ระบบก่อนดูข้อมูลการจัดส่ง",
+            style: TextStyle(fontSize: 16, color: Colors.black54),
+          ),
+        ),
+      );
+    }
+
+    print("👤 Current sender (from Provider): $username");
+
     return Scaffold(
       backgroundColor: const Color(0xFF7DE1A4),
       appBar: AppBar(
@@ -67,7 +86,7 @@ class UTrackSend extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection("orders")
-            .where("sender_name", isEqualTo: username) // 🔹 เฉพาะของเรา
+            .where("sender_name", isEqualTo: username) // 🔹 ดึงเฉพาะของเรา
             .where("status", whereIn: [2, 3]) // 🔹 กำลังมารับหรือจัดส่ง
             .snapshots(),
         builder: (context, snapshot) {
@@ -76,6 +95,9 @@ class UTrackSend extends StatelessWidget {
           }
 
           final orders = snapshot.data!.docs;
+          print(
+            "📦 พบออเดอร์ทั้งหมด ${orders.length} รายการของผู้ใช้ $username",
+          );
 
           if (orders.isEmpty) {
             return const Center(
@@ -83,12 +105,15 @@ class UTrackSend extends StatelessWidget {
             );
           }
 
-          // ✅ เตรียม Marker ทั้งหมด
+          // ✅ สร้าง Marker ทั้งหมด
           List<Marker> markers = [];
           LatLng? firstPos;
 
           for (var doc in orders) {
             final data = doc.data() as Map<String, dynamic>;
+            print(
+              "🗺️ ตรวจข้อมูลออเดอร์: ${doc.id} | status=${data["status"]}",
+            );
 
             // ✅ Marker ของไรเดอร์
             final riderLoc = data["rider_location"];
@@ -134,7 +159,7 @@ class UTrackSend extends StatelessWidget {
           // ✅ UI รวม
           return Column(
             children: [
-              // 🔹 แผนที่
+              // 🔹 แผนที่แสดงตำแหน่งไรเดอร์ทั้งหมด
               Expanded(
                 child: FlutterMap(
                   options: MapOptions(
@@ -152,7 +177,7 @@ class UTrackSend extends StatelessWidget {
                 ),
               ),
 
-              // 🔹 รายละเอียดไรเดอร์
+              // 🔹 รายละเอียดไรเดอร์แต่ละคน
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),

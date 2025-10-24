@@ -2,11 +2,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:delivery/pages/User/U_detail_track.dart';
 import 'package:delivery/pages/User/U_track_receive.dart';
 import 'package:delivery/pages/User/๊๊U_track_send.dart';
+import 'package:delivery/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:provider/provider.dart';
 
-class UTrackPage extends StatelessWidget {
+class UTrackPage extends StatefulWidget {
   const UTrackPage({super.key});
+
+  @override
+  State<UTrackPage> createState() => _UTrackPageState();
+}
+
+class _UTrackPageState extends State<UTrackPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   String _statusText(int status) {
     switch (status) {
@@ -38,19 +60,158 @@ class UTrackPage extends StatelessWidget {
     }
   }
 
+  Widget _buildOrderList(Stream<QuerySnapshot> stream) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text(
+              "ยังไม่มีออเดอร์ในหมวดนี้",
+              style: TextStyle(fontSize: 16, color: Colors.black54),
+            ),
+          );
+        }
+
+        final orders = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: orders.length,
+          itemBuilder: (context, index) {
+            final order = orders[index].data() as Map<String, dynamic>;
+            final orderId = orders[index].id;
+            final riderName = order["rider_name"] ?? "ยังไม่มีไรเดอร์";
+            final riderPhone = order["rider_phone"] ?? "-";
+            final status = order["status"] ?? 1;
+            final imageUrl = order["image_url"] ?? "";
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ✅ รูปสินค้า
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                      image: imageUrl.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(imageUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: imageUrl.isEmpty
+                        ? const Icon(
+                            Icons.inventory_2_outlined,
+                            size: 40,
+                            color: Colors.grey,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+
+                  // ✅ ข้อมูลออเดอร์
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "ชื่อไรเดอร์: $riderName",
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          "เบอร์โทร: $riderPhone",
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        Row(
+                          children: [
+                            const Text("สถานะ: "),
+                            Text(
+                              _statusText(status),
+                              style: TextStyle(
+                                color: _statusColor(status),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black87,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            onPressed: () {
+                              Get.to(() => UDetailTrackPage(orderId: orderId));
+                            },
+                            child: const Text("รายละเอียด"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ✅ สมมติชื่อผู้ใช้ (ในจริงควรได้จากระบบ login)
-    const String username = "user";
+    final userProvider = context.watch<UserProvider>();
+    final username = userProvider.username;
 
-    // ✅ Stream ดึงออเดอร์ที่เราเป็น “ผู้ส่ง”
+    if (username == null || username.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text("⚠️ กรุณาเข้าสู่ระบบใหม่อีกครั้ง")),
+      );
+    }
+
+    print("👤 current username (from Provider): $username");
+
     final sendStream = FirebaseFirestore.instance
         .collection("orders")
         .where("sender_name", isEqualTo: username)
         .where("status", whereIn: [1, 2, 3])
         .snapshots();
 
-    // ✅ Stream ดึงออเดอร์ที่เราเป็น “ผู้รับ”
     final receiveStream = FirebaseFirestore.instance
         .collection("orders")
         .where("receiver_name", isEqualTo: username)
@@ -63,185 +224,31 @@ class UTrackPage extends StatelessWidget {
         backgroundColor: const Color(0xFF7DE1A4),
         elevation: 0,
         title: const Text(
-          "ติดตามของฉันทั้งหมด",
+          "ติดตามของฉัน",
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.black,
+          indicatorColor: Colors.black,
+          tabs: const [
+            Tab(text: "📦 ที่ฉันส่ง"),
+            Tab(text: "📬 ที่ฉันรับ"),
+          ],
+        ),
       ),
 
-      // ✅ รวมทั้ง 2 stream เข้าด้วยกัน
-      body: StreamBuilder<QuerySnapshot>(
-        stream: sendStream,
-        builder: (context, sendSnap) {
-          return StreamBuilder<QuerySnapshot>(
-            stream: receiveStream,
-            builder: (context, recvSnap) {
-              if (sendSnap.connectionState == ConnectionState.waiting ||
-                  recvSnap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final sendOrders = sendSnap.data?.docs ?? [];
-              final recvOrders = recvSnap.data?.docs ?? [];
-
-              // ✅ รวมออเดอร์ที่เป็นของเรา (ส่ง + รับ)
-              final allOrders = [...sendOrders, ...recvOrders];
-
-              // ✅ ลบรายการซ้ำ (กรณีเราเป็นทั้งผู้ส่งและผู้รับ)
-              final uniqueOrders = {
-                for (var doc in allOrders) doc.id: doc,
-              }.values.toList();
-
-              if (uniqueOrders.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "ยังไม่มีออเดอร์ที่เกี่ยวข้องกับคุณ",
-                    style: TextStyle(fontSize: 16, color: Colors.black54),
-                  ),
-                );
-              }
-
-              // ✅ แสดงรายการทั้งหมด
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: uniqueOrders.length,
-                itemBuilder: (context, index) {
-                  final order =
-                      uniqueOrders[index].data() as Map<String, dynamic>;
-                  final orderId = uniqueOrders[index].id;
-                  final riderName = order["rider_name"] ?? "ยังไม่มีไรเดอร์";
-                  final riderPhone = order["rider_phone"] ?? "-";
-                  final status = order["status"] ?? 1;
-                  final imageUrl = order["image_url"] ?? "";
-                  final isSender = order["sender_name"] == username;
-                  final isReceiver = order["receiver_name"] == username;
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ✅ รูปภาพสินค้า
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(8),
-                            image: imageUrl.isNotEmpty
-                                ? DecorationImage(
-                                    image: NetworkImage(imageUrl),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: imageUrl.isEmpty
-                              ? const Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: 40,
-                                  color: Colors.grey,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-
-                        // ✅ ข้อมูลออเดอร์
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "ชื่อไรเดอร์: $riderName",
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                "เบอร์โทร: $riderPhone",
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              Text(
-                                isSender
-                                    ? "ประเภท: ผู้ส่ง"
-                                    : isReceiver
-                                    ? "ประเภท: ผู้รับ"
-                                    : "ไม่ระบุ",
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  const Text(
-                                    "สถานะ: ",
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                  Text(
-                                    _statusText(status),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: _statusColor(status),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.black87,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 8,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    Get.to(
-                                      () => UDetailTrackPage(orderId: orderId),
-                                    );
-                                  },
-                                  child: const Text("รายละเอียด"),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
+      // ✅ แสดงแต่ละแท็บ
+      body: TabBarView(
+        controller: _tabController,
+        children: [_buildOrderList(sendStream), _buildOrderList(receiveStream)],
       ),
 
-      // ✅ ปุ่มด้านล่าง
+      // ✅ ปุ่มล่าง
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         color: const Color(0xFF7DE1A4),
@@ -250,7 +257,7 @@ class UTrackPage extends StatelessWidget {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  Get.to(() => UTrackSend(username: username));
+                  Get.to(() => const UTrackSend());
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
@@ -259,7 +266,7 @@ class UTrackPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("ติดตามการส่ง"),
+                child: const Text("ดูแผนที่การส่ง"),
               ),
             ),
             const SizedBox(width: 16),
@@ -275,7 +282,7 @@ class UTrackPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("ติดตามการรับ"),
+                child: const Text("สินค้าที่ได้รับสำเร็จ"),
               ),
             ),
           ],
